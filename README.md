@@ -92,19 +92,19 @@ Cada organización (tenant) es una unidad de aislamiento lógico en Supabase/Pos
 ```mermaid
 flowchart TB
     subgraph Platform["Plataforma SaaS"]
-        AUTH["Auth / JWT · Tenant Context"]
+        AUTH["Auth JWT - Tenant Context"]
         API["API REST + Motor EVM"]
         RBAC["Motor RBAC parametrizable"]
     end
 
-    subgraph TenantA["Tenant A — PYME 8 colaboradores"]
-        OA["Owner/CEO"]
-        AA1["Área: Terreno"]
-        AA2["Área: Finanzas"]
+    subgraph TenantA["Tenant A - PYME 8 colaboradores"]
+        OA["Owner CEO"]
+        AA1["Area Terreno"]
+        AA2["Area Finanzas"]
     end
 
-    subgraph TenantB["Tenant B — PYME 45 colaboradores"]
-        OB["Owner/CEO"]
+    subgraph TenantB["Tenant B - PYME 45 colaboradores"]
+        OB["Owner CEO"]
         AB1["Operaciones"]
         AB2["Terreno"]
         AB3["Finanzas"]
@@ -166,24 +166,24 @@ Permisos atómicos del dominio:
 
 ```mermaid
 sequenceDiagram
-    participant U as Usuario (Tenant)
+    participant U as Usuario Tenant
     participant API as API REST
     participant RBAC as Motor RBAC
     participant EVM as Motor EVM
     participant DB as PostgreSQL
 
-    U->>API: POST /progress + evidence_id
-    API->>RBAC: ¿posee progress.submit en este tenant/área?
+    U->>API: POST progress con evidence_id
+    API->>RBAC: Verifica permiso progress.submit
     alt Sin permiso
         RBAC-->>API: 403 Forbidden
     else Con permiso
         API->>EVM: Evaluar candado EV
-        EVM->>DB: Estado evidencia + rol evidence.approve
+        EVM->>DB: Estado evidencia y rol approve
         alt Evidencia no validada
-            EVM-->>API: 409 — EV bloqueado
+            EVM-->>API: 409 EV bloqueado
         else Evidencia validada
-            EVM->>DB: Persistir avance + recalcular EV/Curva S
-            EVM-->>API: 200 + métricas
+            EVM->>DB: Persistir avance y recalcular EVM
+            EVM-->>API: 200 con metricas
         end
     end
 ```
@@ -239,14 +239,16 @@ Una vez validada la importación, un rol con `baseline.freeze` **congela** la L�
 Ante desviaciones detectadas por la Curva S ($SPI$/$CPI$ fuera de umbral, o decisión de PMO):
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Draft: Importación CSV/Excel
-    Draft --> Frozen_v1: baseline.freeze (v1.0)
-    Frozen_v1 --> Monitoring: Avances + AC + Evidencias
-    Monitoring --> ReplanDraft: Desvío / decisión PMO
-    ReplanDraft --> Frozen_v2: baseline.replan (v2.0)
-    Frozen_v2 --> Monitoring: Nueva baseline activa
-    Monitoring --> [*]: Cierre de proyecto
+flowchart TD
+    Start([Inicio]) --> Import[Importacion CSV Excel]
+    Import --> Draft[Baseline DRAFT]
+    Draft -->|baseline freeze v1.0| FrozenV1[Frozen v1.0]
+    FrozenV1 --> Monitoring[Monitoreo EVM y Curva S]
+    Monitoring -->|Avances AC Evidencias| Monitoring
+    Monitoring -->|Desvio o decision PMO| ReplanDraft[Replan DRAFT]
+    ReplanDraft -->|baseline replan v2.0| FrozenV2[Frozen v2.0]
+    FrozenV2 --> Monitoring
+    Monitoring -->|Cierre de proyecto| EndNode([Fin])
 ```
 
 | Versión | Disparador | Contenido | Relación con histórico |
@@ -294,15 +296,15 @@ CSV/Excel ──► Validación ──► Baseline DRAFT ──► FREEZE v1.0
 ```mermaid
 flowchart LR
     subgraph UI["Frontend"]
-        ST["Streamlit / Dash\nDashboard · Curva S · Admin RBAC"]
+        ST["Streamlit Dash - Dashboard Curva S - Admin RBAC"]
     end
 
     subgraph BE["Backend"]
-        API["FastAPI\nREST + Auth Tenant"]
-        IMP["Data Pipeline\nCSV/Excel → Baseline"]
+        API["FastAPI - REST Auth Tenant"]
+        IMP["Data Pipeline CSV Excel a Baseline"]
         RBAC["RBAC Engine"]
-        EVM["EVM Engine\nPV EV AC CPI SPI EAC VAC"]
-        LOCK["Candado EV\nEvidencia validada"]
+        EVM["EVM Engine PV EV AC CPI SPI EAC VAC"]
+        LOCK["Candado EV - Evidencia validada"]
     end
 
     subgraph DATA["Datos"]
@@ -337,22 +339,22 @@ flowchart LR
 
 ```mermaid
 gantt
-    title Roadmap MVP → Defensa Final
+    title Roadmap MVP a Defensa Final
     dateFormat  YYYY-MM-DD
     axisFormat  %b %Y
 
     section Seminario 1
-    Data Pipeline CSV → Supabase           :a1, 2026-07-01, 2026-08-10
-    Motor EVM básico + Curva S             :a2, 2026-07-10, 2026-08-15
-    RBAC multi-perfil + áreas              :a3, 2026-07-15, 2026-08-16
-    Candado evidencia → EV                 :a4, 2026-07-20, 2026-08-17
-    Presentación MVP                       :milestone, m1, 2026-08-18, 0d
+    Data Pipeline CSV a Supabase           :a1, 2026-07-01, 2026-08-10
+    Motor EVM basico y Curva S             :a2, 2026-07-10, 2026-08-15
+    RBAC multi-perfil y areas              :a3, 2026-07-15, 2026-08-16
+    Candado evidencia a EV                 :a4, 2026-07-20, 2026-08-17
+    Presentacion MVP                       :milestone, m1, 2026-08-18, 0d
 
     section Seminario 2
-    Tradeoff arquitectónico                :b1, 2026-09-01, 2026-10-15
-    Prototipo SII / facturación            :b2, 2026-10-01, 2026-11-15
-    Proyección predictiva                  :b3, 2026-10-15, 2026-11-20
-    Refinamiento UI/UX                     :b4, 2026-09-15, 2026-11-25
+    Tradeoff arquitectonico                :b1, 2026-09-01, 2026-10-15
+    Prototipo SII facturacion              :b2, 2026-10-01, 2026-11-15
+    Proyeccion predictiva                  :b3, 2026-10-15, 2026-11-20
+    Refinamiento UI UX                     :b4, 2026-09-15, 2026-11-25
     Defensa Final                          :milestone, m2, 2026-11-28, 0d
 ```
 
