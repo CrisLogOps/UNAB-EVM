@@ -1,7 +1,8 @@
 # Control de versiones y tags (semanal)
 
 > **Idioma principal:** español · English summary: [versioning.en.md](./versioning.en.md)  
-> **Objetivo:** que cada integrante identifique de inmediato *en qué etapa está el desarrollo*, *qué semana* y *qué mejora* representa el tag.
+> **Objetivo:** que cada integrante identifique de inmediato *en qué etapa está el desarrollo*, *qué semana* y *qué mejora* representa el tag.  
+> **Continuidad semanal:** [weekly-cadence.md](./weekly-cadence.md) (Issues + ritual sin alterar ramas/tags).
 
 ---
 

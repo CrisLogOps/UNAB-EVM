@@ -1,0 +1,76 @@
+name: Seguimiento semanal
+description: Solicitar y trackear el avance semanal (Dev → staging → main) sin alterar ramas existentes.
+title: "[Semana YYYY.Www] Seguimiento semanal"
+labels: ["cadencia-semanal", "Dev"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usa esta plantilla para **pedir continuidad** de la semana.
+        No reemplaza el código ni mueve tags antiguos: solo organiza el seguimiento.
+        Guía: `docs/weekly-cadence.md` · Tags: `docs/versioning.md`
+  - type: input
+    id: semana
+    attributes:
+      label: Semana ISO
+      description: Formato YYYY.Www
+      placeholder: "2026.W34"
+    validations:
+      required: true
+  - type: dropdown
+    id: dueno
+    attributes:
+      label: Dueño de cadencia
+      options:
+        - CL (Cristian Lorca)
+        - AS (Alejandro Suárez)
+        - CL-AS (compartido)
+    validations:
+      required: true
+  - type: textarea
+    id: objetivos
+    attributes:
+      label: Mejoras previstas (1–3)
+      description: Una por línea — alcance kebab-case + responsable + criterio de listo
+      placeholder: |
+        presupuesto-meta | CL | freeze DRAFT documentado en API
+        reglas-f30 | AS | candado laboral con alerta ROJA descrita
+    validations:
+      required: true
+  - type: textarea
+    id: tags_propuestos
+    attributes:
+      label: Tags -dev propuestos
+      placeholder: |
+        v0.2.1-dev.2026.W34+CL.presupuesto-meta
+        v0.2.2-dev.2026.W34+AS.reglas-f30
+    validations:
+      required: false
+  - type: checkboxes
+    id: reglas
+    attributes:
+      label: Compromisos (no alterar desarrollo actual)
+      options:
+        - label: Trabajo de la semana solo en rama Dev
+          required: true
+        - label: No reescribir historial ni mover tags ya publicados
+          required: true
+        - label: Promoción a staging/main solo por PR tras checklist
+          required: true
+  - type: checkboxes
+    id: cierre
+    attributes:
+      label: Checklist de cierre (ir marcando)
+      options:
+        - label: Tags -dev creados
+        - label: Listo para staging (criterios OK)
+        - label: PR Dev → staging mergeado + tag -staging
+        - label: Validación en staging OK
+        - label: PR staging → main mergeado + tag vX.Y.Z
+        - label: Tabla Últimos tags actualizada en docs/versioning.md
+  - type: textarea
+    id: notas
+    attributes:
+      label: Bloqueos / notas
+      placeholder: Riesgos, dependencias, lo que no entra esta semana…

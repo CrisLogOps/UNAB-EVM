@@ -11,6 +11,8 @@
 | [data-pipeline.md](./data-pipeline.md) | Presupuesto Meta (APU real): DRAFT → freeze v1.0 → replan |
 | [versioning.md](./versioning.md) | **Tags semanales** — nomenclatura, canales Dev/staging/main, códigos de integrante |
 | [versioning.en.md](./versioning.en.md) | Versioning tags (English summary) |
+| [weekly-cadence.md](./weekly-cadence.md) | **Cadencia semanal** — solicitar seguimiento desde Dev sin alterar ramas/tags |
+| [templates/seguimiento-semanal.md](./templates/seguimiento-semanal.md) | Plantilla de Issue / coordinación semanal |
 | [roadmap.md](./roadmap.md) | Cronograma Seminario 1 → Seminario 2 |
 | `api-openapi.yaml` | Contrato OpenAPI (pendiente de generación) |
 | `thesis/` | Anexos / documento formal fusionado con el original del proyecto |

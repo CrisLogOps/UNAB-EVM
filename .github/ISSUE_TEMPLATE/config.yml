@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Guía de cadencia semanal
+    url: https://github.com/CrisLogOps/UNAB-EVM/blob/Dev/docs/weekly-cadence.md
+    about: Cómo solicitar seguimiento sin alterar ramas ni tags existentes.
+  - name: Nomenclatura de tags
+    url: https://github.com/CrisLogOps/UNAB-EVM/blob/Dev/docs/versioning.md
+    about: Formato vMAJOR.MINOR.PATCH[-canal][+YYYY.Www][+COD.alcance].
