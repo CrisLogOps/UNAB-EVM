@@ -65,6 +65,7 @@ Deep dives (Spanish technical docs; English summaries may follow):
 | [docs/business-rules.md](./docs/business-rules.md) | EV / labor locks, retainage |
 | [docs/architecture.md](./docs/architecture.md) | ADRs, offline PWA + GPS |
 | [docs/rbac-matrix.md](./docs/rbac-matrix.md) | Phase 2 permission matrix |
+| [docs/versioning.md](./docs/versioning.md) | Weekly tags & member nomenclature ([EN summary](./docs/versioning.en.md)) |
 | [docs/integration/](./docs/integration/) | Feasibility by delivery waves |
 
 ---
