@@ -9,6 +9,8 @@
 | [rbac-matrix.md](./rbac-matrix.md) | Matriz de permisos (F30, retenciones, DRAFT Meta, Dashboard-First) |
 | [business-rules.md](./business-rules.md) | Candado EV, Candado Laboral F30/F30-1, retenciones 5–10% |
 | [data-pipeline.md](./data-pipeline.md) | Presupuesto Meta (APU real): DRAFT → freeze v1.0 → replan |
+| [versioning.md](./versioning.md) | **Tags semanales** — nomenclatura, canales Dev/staging/main, códigos de integrante |
+| [versioning.en.md](./versioning.en.md) | Versioning tags (English summary) |
 | [roadmap.md](./roadmap.md) | Cronograma Seminario 1 → Seminario 2 |
 | `api-openapi.yaml` | Contrato OpenAPI (pendiente de generación) |
 | `thesis/` | Anexos / documento formal fusionado con el original del proyecto |
