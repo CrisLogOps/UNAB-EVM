@@ -14,7 +14,26 @@ Lean/MVP **SaaS** for controlling projects with **variable field costs** — wit
 |---|---|
 | **Product (code)** | This repository |
 | **Proposal site** | [CrisLogOps/OpenEVM](https://github.com/CrisLogOps/OpenEVM) (Netlify) |
-| **Phase 2 working branch** | `Dev` |
+| **Development** | `Dev` |
+| **Pre-production validation** | `staging` |
+| **Production** | `main` |
+
+### Branch flow
+
+```text
+Dev  ──(PR / merge)──►  staging  ──(validation OK)──►  main
+ ▲                         │                            │
+ │                         │  tests, review, QA         │  production
+ └──── day-to-day work ────┘                            └── stable
+```
+
+| Branch | Purpose |
+|--------|---------|
+| **`Dev`** | Day-to-day development (features, docs, fixes). |
+| **`staging`** | **Validation gate** before production: integrate stable work from `Dev`, test and review. |
+| **`main`** | Production / stable public product reference. |
+
+Lean rule: nothing reaches `main` without going through `staging` (except agreed critical hotfixes).
 
 ---
 
