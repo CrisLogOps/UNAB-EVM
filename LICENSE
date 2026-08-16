@@ -1,5 +1,39 @@
 Copyright (c) 2026 Alejandro Suárez & Cristian Lorca
 
-Uso académico / demostrativo en el marco de tesis de grado (UNAB).
-Redistribución o uso externo sujeto a políticas institucionales y acuerdo de los autores.
-No constituye un producto comercial certificado.
+UNAB-EVM / OpenEVM — Licencia académica (etapa Seminario de Grado)
+
+1. Propiedad
+   El código, la documentación y los materiales de este repositorio son
+   propiedad de los autores arriba indicados, en el marco del Seminario
+   de Grado de la Universidad Andrés Bello (UNAB).
+
+2. Uso permitido (sin permiso adicional)
+   - Lectura del repositorio público.
+   - Uso estrictamente educativo, de investigación o demostración académica.
+   - Ejecución local del software con fines de evaluación o aprendizaje.
+   - Propuesta de mejoras mediante Issues y Pull Requests hacia la rama Dev,
+     sujetas a aceptación por los mantenedores.
+
+3. Uso no autorizado sin permiso escrito de los autores
+   - Uso comercial, venta, sublicencia o redistribución como producto.
+   - Presentar el software como producto certificado, auditado o “listo para
+     producción industrial” en nombre de los autores o de la UNAB.
+   - Eliminar avisos de copyright o de esta licencia.
+
+4. Contribuciones
+   Quien envíe un aporte (código, docs, issues con material original) declara
+   que tiene derecho a aportarlo y que, de ser aceptado, queda sujeto a los
+   mismos términos de este archivo LICENSE, sin ceder derechos exclusivos
+   más allá de lo necesario para mantener y publicar el proyecto académico.
+
+5. Ausencia de garantía
+   EL SOFTWARE SE ENTREGA “TAL CUAL”, SIN GARANTÍAS DE NINGÚN TIPO.
+   Los autores no responden por daños derivados de su uso.
+
+6. Evolución futura
+   Los autores podrán adoptar una licencia opensource reconocida (p. ej. MIT,
+   Apache-2.0 u otra) en un release posterior, previo acuerdo entre ellos.
+   Hasta ese anuncio explícito en este archivo, rigen estos términos académicos.
+
+Contacto de derechos: vía Issues del repositorio
+https://github.com/CrisLogOps/UNAB-EVM

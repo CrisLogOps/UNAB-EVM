@@ -4,6 +4,7 @@
 [![English](https://img.shields.io/badge/Language-English-1e3a5f?style=flat-square)](./README.en.md)
 [![Stack](https://img.shields.io/badge/Stack-Supabase%20%7C%20FastAPI%20%7C%20Streamlit-0ea5e9?style=flat-square)](#technology-stack)
 [![Phase](https://img.shields.io/badge/Phase-2%20Degree%20Seminar%20II-blue?style=flat-square)](./docs)
+[![License](https://img.shields.io/badge/License-Academic-lightgrey?style=flat-square)](./LICENSE)
 
 > **Primary documentation is in Spanish:** [README.md](./README.md)  
 > This file is the English mirror for international readers and bilingual reviewers.
@@ -34,6 +35,13 @@ Dev  ──(PR / merge)──►  staging  ──(validation OK)──►  main
 | **`main`** | Production / stable public product reference. |
 
 Lean rule: nothing reaches `main` without going through `staging` (except agreed critical hotfixes).
+
+### Contributing (community)
+
+We welcome interested contributors **under code control**: open PRs against **`Dev`**; a maintainer reviews; only maintainers promote to `staging` / `main` (production).
+
+- Full guide: **[CONTRIBUTING.en.md](./CONTRIBUTING.en.md)** · [Español](./CONTRIBUTING.md)
+- PR template and `CODEOWNERS` under `.github/`
 
 ---
 
@@ -123,6 +131,8 @@ pip install -r requirements.txt && streamlit run app.py
 UNAB-EVM/
 ├── README.md              ← Spanish (primary)
 ├── README.en.md           ← this file (English)
+├── CONTRIBUTING.md        ← how to contribute (community → Dev → staging → main)
+├── CONTRIBUTING.en.md
 ├── backend/               # FastAPI
 ├── frontend/              # Streamlit
 ├── database/              # schemas / migrations
@@ -135,10 +145,13 @@ UNAB-EVM/
 
 ## Team & governance
 
-Degree seminar project (UNAB).  
+Degree seminar project (UNAB), open to **interested contributors** with mandatory review.  
 Product code lives here; outreach site at [OpenEVM](https://github.com/CrisLogOps/OpenEVM).
 
-**License:** academic use / see `LICENSE`.
+**License:** **academic** (UNAB degree seminar) — see [`LICENSE`](./LICENSE).  
+Educational / research / demo use. Commercial use or product redistribution: written permission from the authors.  
+Team checklist: [`docs/license-academic.md`](./docs/license-academic.md).  
+**Contributing:** [CONTRIBUTING.en.md](./CONTRIBUTING.en.md).
 
 ---
 

@@ -1,0 +1,12 @@
+# Revisión de código — mantenedor único o equipo pequeño
+
+Este archivo indica a GitHub **quién debe revisar** los cambios.
+No reemplaza la protección de ramas: úsalo junto con “Require pull request” en `main` / `staging`.
+
+# Por defecto, todo el árbol requiere revisión del dueño del repo
+* @CrisLogOps
+
+# Documentación de contribución: revisar con especial cuidado
+/CONTRIBUTING.md @CrisLogOps
+/CONTRIBUTING.en.md @CrisLogOps
+/docs/ @CrisLogOps

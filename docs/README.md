@@ -13,6 +13,8 @@
 | [versioning.en.md](./versioning.en.md) | Versioning tags (English summary) |
 | [weekly-cadence.md](./weekly-cadence.md) | **Cadencia semanal** — solicitar seguimiento desde Dev sin alterar ramas/tags |
 | [templates/seguimiento-semanal.md](./templates/seguimiento-semanal.md) | Plantilla de Issue / coordinación semanal |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | **Aportes de la comunidad** — PR a Dev, revisión, camino a producción |
+| [license-academic.md](./license-academic.md) | **Licencia académica** — checklist; foco MVP, OSI diferido |
 | [roadmap.md](./roadmap.md) | Cronograma Seminario 1 → Seminario 2 |
 | `api-openapi.yaml` | Contrato OpenAPI (pendiente de generación) |
 | `thesis/` | Anexos / documento formal fusionado con el original del proyecto |

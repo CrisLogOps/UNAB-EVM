@@ -4,6 +4,7 @@
 [![English](https://img.shields.io/badge/Language-English-1e3a5f?style=flat-square)](./README.en.md)
 [![Stack](https://img.shields.io/badge/Stack-Supabase%20%7C%20FastAPI%20%7C%20Streamlit-0ea5e9?style=flat-square)](#stack-tecnológico)
 [![Fase](https://img.shields.io/badge/Fase-2%20Seminario%20II-blue?style=flat-square)](./docs)
+[![Licencia](https://img.shields.io/badge/Licencia-Académica-lightgrey?style=flat-square)](./LICENSE)
 
 > **Documentación en inglés:** [README.en.md](./README.en.md)
 
@@ -33,6 +34,13 @@ Dev  ──(PR / merge)──►  staging  ──(validación OK)──►  main
 | **`main`** | Producción / referencia pública estable del producto. |
 
 Regla Lean: nada llega a `main` sin haber pasado por `staging` (salvo hotfixes críticos acordados).
+
+### Contribuir (comunidad)
+
+El proyecto admite aportes de interesados **con control de código**: los externos abren PR hacia **`Dev`**; un mantenedor revisa y solo el equipo promueve a `staging` / `main` (producción).
+
+- Guía completa: **[CONTRIBUTING.md](./CONTRIBUTING.md)** · [English](./CONTRIBUTING.en.md)
+- Plantilla de PR y `CODEOWNERS` en `.github/`
 
 ---
 
@@ -122,6 +130,8 @@ pip install -r requirements.txt && streamlit run app.py
 UNAB-EVM/
 ├── README.md              ← este archivo (español, principal)
 ├── README.en.md           ← English documentation
+├── CONTRIBUTING.md        ← cómo aportar (comunidad → Dev → staging → main)
+├── CONTRIBUTING.en.md
 ├── backend/               # FastAPI
 ├── frontend/              # Streamlit
 ├── database/              # esquemas / migraciones
@@ -134,10 +144,13 @@ UNAB-EVM/
 
 ## Equipo y gobernanza
 
-Proyecto de **Seminario de Grado** (UNAB).  
+Proyecto de **Seminario de Grado** (UNAB), abierto a **interesados** bajo revisión obligatoria.  
 Código de producto en este repo; sitio de difusión en [OpenEVM](https://github.com/CrisLogOps/OpenEVM).
 
-**Licencia:** uso académico / ver `LICENSE`.
+**Licencia:** **académica** (Seminario de Grado UNAB) — ver [`LICENSE`](./LICENSE).  
+Uso educativo / investigación / demo. Uso comercial o redistribución como producto: permiso escrito de los autores.  
+Checklist del equipo: [`docs/license-academic.md`](./docs/license-academic.md).  
+**Aportes:** [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
