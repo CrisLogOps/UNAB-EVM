@@ -64,6 +64,7 @@ Detalle normativo y técnico:
 | [docs/business-rules.md](./docs/business-rules.md) | Candados EV / laboral, retenciones |
 | [docs/architecture.md](./docs/architecture.md) | ADRs, PWA offline + GPS |
 | [docs/rbac-matrix.md](./docs/rbac-matrix.md) | Matriz de permisos Fase 2 |
+| [docs/versioning.md](./docs/versioning.md) | Tags semanales y nomenclatura por integrante |
 | [docs/integration/](./docs/integration/) | Factibilidad por olas |
 
 ---
