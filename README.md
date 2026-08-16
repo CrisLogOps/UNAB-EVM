@@ -42,6 +42,12 @@ El proyecto admite aportes de interesados **con control de código**: los extern
 - Guía completa: **[CONTRIBUTING.md](./CONTRIBUTING.md)** · [English](./CONTRIBUTING.en.md)
 - Plantilla de PR y `CODEOWNERS` en `.github/`
 
+### Arranque del desarrollo (lectura corta)
+
+1. **Esta semana (hasta el martes):** entrega Fase 1 / Seminario 1 — no abrir el MVP a fondo.  
+2. **Después:** seguir [`docs/kickoff-desarrollo.md`](./docs/kickoff-desarrollo.md) y el plan en Google Sheets.  
+3. Crear Issues pegando [`docs/templates/issues-arranque/`](./docs/templates/issues-arranque/).
+
 ---
 
 ## ¿Para quién?

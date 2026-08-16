@@ -15,6 +15,8 @@
 | [templates/seguimiento-semanal.md](./templates/seguimiento-semanal.md) | Plantilla de Issue / coordinación semanal |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | **Aportes de la comunidad** — PR a Dev, revisión, camino a producción |
 | [license-academic.md](./license-academic.md) | **Licencia académica** — checklist; foco MVP, OSI diferido |
+| [kickoff-desarrollo.md](./kickoff-desarrollo.md) | **Pie inicial** — qué hacer antes/después del martes Seminario 1 |
+| [templates/issues-arranque/](./templates/issues-arranque/) | Textos de Issues para pegar en GitHub (W34 + epic + aviso foco) |
 | [roadmap.md](./roadmap.md) | Cronograma Seminario 1 → Seminario 2 |
 | `api-openapi.yaml` | Contrato OpenAPI (pendiente de generación) |
 | `thesis/` | Anexos / documento formal fusionado con el original del proyecto |
