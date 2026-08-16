@@ -13,7 +13,26 @@ Plataforma **SaaS Lean/MVP** para el control de proyectos con gasto variable en 
 |---|---|
 | **Producto (código)** | Este repositorio |
 | **Sitio de propuesta** | [CrisLogOps/OpenEVM](https://github.com/CrisLogOps/OpenEVM) (Netlify) |
-| **Rama de trabajo Fase 2** | `Dev` |
+| **Desarrollo** | `Dev` |
+| **Validación pre-producción** | `staging` |
+| **Producción** | `main` |
+
+### Flujo de ramas
+
+```text
+Dev  ──(PR / merge)──►  staging  ──(validación OK)──►  main
+ ▲                         │                            │
+ │                         │  pruebas, revisión, QA     │  producción
+ └──── desarrollo diario ──┘                            └── estable
+```
+
+| Rama | Uso |
+|------|-----|
+| **`Dev`** | Trabajo diario de desarrollo (features, docs, fixes). |
+| **`staging`** | Punto de **validación** antes de producción: integrar lo estable de `Dev`, probar y revisar. |
+| **`main`** | Producción / referencia pública estable del producto. |
+
+Regla Lean: nada llega a `main` sin haber pasado por `staging` (salvo hotfixes críticos acordados).
 
 ---
 
