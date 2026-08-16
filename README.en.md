@@ -1,0 +1,127 @@
+# OpenEVM / UNAB-EVM — EVM project & worksite control for SMEs
+
+[![Español](https://img.shields.io/badge/Idioma-Español-0f7a5f?style=flat-square)](./README.md)
+[![English](https://img.shields.io/badge/Language-English-1e3a5f?style=flat-square)](./README.en.md)
+[![Stack](https://img.shields.io/badge/Stack-Supabase%20%7C%20FastAPI%20%7C%20Streamlit-0ea5e9?style=flat-square)](#technology-stack)
+[![Phase](https://img.shields.io/badge/Phase-2%20Degree%20Seminar%20II-blue?style=flat-square)](./docs)
+
+> **Primary documentation is in Spanish:** [README.md](./README.md)  
+> This file is the English mirror for international readers and bilingual reviewers.
+
+Lean/MVP **SaaS** for controlling projects with **variable field costs** — with a strong fit for **Chilean construction SMEs** — featuring an **EVM** engine, **S-curve**, **multi-tenant RBAC**, a **Control Budget / Meta Budget (real unit-price analysis)**, and operational locks (evidence, labor certificates F30/F30-1, and retainage).
+
+| | |
+|---|---|
+| **Product (code)** | This repository |
+| **Proposal site** | [CrisLogOps/OpenEVM](https://github.com/CrisLogOps/OpenEVM) (Netlify) |
+| **Phase 2 working branch** | `Dev` |
+
+---
+
+## Who is this for?
+
+Spanish-speaking operators and **Chilean field/construction SMEs** that today run control on spreadsheets and chat, and need to:
+
+- Validate **physical progress** and **budget** on a frequent (even daily) cutoff.
+- Protect the firm from **joint labor liability** on subcontractors (F30 / F30-1 certificates).
+- Separate the **bid/contract price** from the internal **Meta / Control Budget** (re-takeoffs and real APUs).
+- Keep the **Works Administrator / Owner** on a **KPI dashboard**, not typing data on site.
+
+---
+
+## Phase 2 differentiators
+
+1. **Meta Budget (real APU)** — contractual import lands as `DRAFT`; after re-takeoff/quoting in the first month on site, `baseline.freeze` creates **v1.0**. Later replans produce **v2.0+** with full history.
+2. **Evidence lock ($EV$)** — without validated evidence, Earned Value does not increase.
+3. **Labor lock (F30 / F30-1)** — missing/unvalidated period certificates → **RED** alert and backend block of the subcontractor payment certificate (Estado de Pago).
+4. **Performance retainage (5%–10%)** — automatic hold on approved subcontractor payment certificates; release only with explicit authorization.
+5. **Offline-first field capture (PWA + GPS)** — progress logged without signal; sync to Supabase when connectivity returns.
+6. **Dashboard-First RBAC** — Owner / Works Administrator decide; Field and Technical Office own data entry.
+
+Deep dives (Spanish technical docs; English summaries may follow):
+
+| Document | Topic |
+|----------|--------|
+| [docs/data-pipeline.md](./docs/data-pipeline.md) | Meta Budget, DRAFT → freeze |
+| [docs/business-rules.md](./docs/business-rules.md) | EV / labor locks, retainage |
+| [docs/architecture.md](./docs/architecture.md) | ADRs, offline PWA + GPS |
+| [docs/rbac-matrix.md](./docs/rbac-matrix.md) | Phase 2 permission matrix |
+| [docs/integration/](./docs/integration/) | Feasibility by delivery waves |
+
+---
+
+## Technology stack
+
+| Layer | Technology | Role |
+|-------|------------|------|
+| Data / Auth / Storage | **Supabase (PostgreSQL)** | Multi-tenant, evidence, F30 files |
+| API / business rules | **FastAPI (Python)** | EVM, RBAC, locks, payment certificates |
+| Management dashboard | **Streamlit** | Owner, Works Admin, PMO, Finance |
+| Field capture | **Offline-first PWA** | Site lead + GPS |
+| Public proposal site | Netlify (`OpenEVM`) | ES/EN landing |
+
+---
+
+## Flow (short)
+
+```text
+Bid CSV → DRAFT (re-takeoff + real APU) → freeze v1.0 Meta Budget
+        ↓
+Field (PWA): progress + photo + GPS  →  validated evidence  →  EV
+        ↓
+Finance: F30/F30-1 + subcontractor PC → 5–10% retainage → net pay (unless labor-locked)
+        ↓
+Streamlit: S-curve, CPI/SPI, RED alerts
+```
+
+---
+
+## Local quickstart
+
+```bash
+git clone git@github.com:CrisLogOps/UNAB-EVM.git
+cd UNAB-EVM
+git checkout Dev
+
+cp .env.example .env   # set SUPABASE_* and secrets
+
+# API
+cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
+
+# Dashboard
+cd ../frontend && python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && streamlit run app.py
+```
+
+> If a module is still scaffold-only, check [`docs/roadmap.md`](./docs/roadmap.md).
+
+---
+
+## Repository layout
+
+```text
+UNAB-EVM/
+├── README.md              ← Spanish (primary)
+├── README.en.md           ← this file (English)
+├── backend/               # FastAPI
+├── frontend/              # Streamlit
+├── database/              # schemas / migrations
+├── docs/                  # rules, architecture, RBAC, pipeline
+├── tests/
+└── scripts/
+```
+
+---
+
+## Team & governance
+
+Degree seminar project (UNAB).  
+Product code lives here; outreach site at [OpenEVM](https://github.com/CrisLogOps/OpenEVM).
+
+**License:** academic use / see `LICENSE`.
+
+---
+
+## Documentación en español
+
+La documentación principal del repositorio está en **[README.md](./README.md)**.
