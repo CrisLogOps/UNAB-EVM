@@ -1,0 +1,63 @@
+# Desarrollo local: Postgres + API + plataforma web.
+#   docker compose up -d --build
+# Producción (Supabase, validación de terceros):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+services:
+  db:
+    image: postgres:15
+    container_name: openevm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: openevm
+      POSTGRES_DB: postgres
+    ports:
+      - "54322:5432"
+    volumes:
+      - openevm_pg:/var/lib/postgresql/data
+      - ./database/migrations/001_mvp.sql:/docker-entrypoint-initdb.d/001_mvp.sql:ro
+      - ./database/seeds/002_mvp_demo.sql:/docker-entrypoint-initdb.d/002_mvp_demo.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: openevm-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:openevm@db:5432/postgres
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      MVP_TENANT_ID: mvp-demo
+      API_DEBUG: "true"
+    ports:
+      - "8000:8000"
+
+  web:
+    image: node:22-bookworm-slim
+    container_name: openevm-web
+    restart: unless-stopped
+    working_dir: /app
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ./apps/web:/app
+      - web_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --hostname 0.0.0.0 --port 3000"
+
+volumes:
+  openevm_pg:
+  web_node_modules:

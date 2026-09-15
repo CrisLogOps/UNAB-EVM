@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3f6f5;
+  --foreground: #12211f;
+  --brand: #0b4a44;
+  --brand-dark: #07332f;
+  --accent: #2ecc71;
+  --header: #ffffff;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-sans-family);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans-family), ui-sans-serif, system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+body {
+  min-width: 0;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+input,
+select,
+textarea,
+button {
+  font-size: 16px;
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 14px;
+  }
+}
+
+.btn-brand {
+  background: var(--brand);
+  color: #fff;
+}
+
+.btn-brand:hover {
+  background: var(--brand-dark);
+}
+
+.min-w-0 {
+  min-width: 0;
+}

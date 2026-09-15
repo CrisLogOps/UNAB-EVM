@@ -111,18 +111,27 @@ Streamlit: Curva S, CPI/SPI, alertas ROJAS
 
 ## Quickstart local
 
+Guía completa para colega y base de prueba: [`docs/local-mvp.md`](./docs/local-mvp.md).
+
 ```bash
 git clone git@github.com:CrisLogOps/UNAB-EVM.git
 cd UNAB-EVM
 git checkout Dev
 
-cp .env.example .env   # completar SUPABASE_* y secretos
+cp .env.example .env
+cp apps/web/.env.example apps/web/.env.local
 
-# API
+./scripts/run_local.sh          # Docker: Postgres + API + web en :3000
+```
+
+El estado del MVP (kickoff, áreas, conocimiento) queda en Postgres de **desarrollo**. El mismo SQL se aplica a **Supabase** como producción para validación de terceros (`docs/local-mvp.md`).
+
+```bash
+# API suelta (sin Docker)
 cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
 
-# Dashboard
-cd ../frontend && python -m venv .venv && source .venv/bin/activate
+# Dashboard Streamlit (legado, opcional)
+cd frontend && python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && streamlit run app.py
 ```
 
@@ -142,6 +151,9 @@ UNAB-EVM/
 ├── frontend/              # Streamlit
 ├── database/              # esquemas / migraciones
 ├── docs/                  # reglas, arquitectura, RBAC, pipeline
+├── apps/web               # Next.js (producto actual)
+├── docker-compose.yml     # Dev: Postgres + FastAPI + Next.js
+├── docker-compose.prod.yml # Overlay: API → Supabase (sin Postgres local)
 ├── tests/
 └── scripts/
 ```

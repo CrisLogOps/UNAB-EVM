@@ -39,3 +39,11 @@ Thumbs.db
 uploads/
 tmp/
 *.sqlite3
+
+# Next.js (apps/web)
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+apps/web/.env*.local

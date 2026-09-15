@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
-# Placeholder: cargar seeds demo en Supabase cuando existan migraciones.
+# Placeholder reemplazado: usar scripts/apply_db.sh
 set -euo pipefail
-echo "TODO: ejecutar database/seeds contra DATABASE_URL"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$ROOT/scripts/apply_db.sh"

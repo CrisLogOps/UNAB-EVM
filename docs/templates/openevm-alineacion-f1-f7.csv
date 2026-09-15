@@ -1,0 +1,58 @@
+﻿ID;Fase;Paso del libro;En OpenEVM;Ruta;En producto;Notas de alineación
+F0.1;F0;Alta tenant / áreas / puestos;Setup 0: empresa, áreas, perfiles, equipo;/admin;sí;No está en el Excel; es previo a F1
+F1.1;F1;Notificación de adjudicación;Registro de cliente y proyecto;/clients;sí;Oficio PDF aún no es documento aparte
+F1.2;F1;Revisión condiciones contractuales;Condiciones + propuesta inicial de Comercial;/clients;parcial;Loop de negociación legal no modelado
+F1.3;F1;Firma y garantías contractuales;Tipo de contrato y garantías en kickoff interno;/clients;parcial;Sin boletas ni canje de fiel cumplimiento
+F1.4;F1;Designación del equipo;Asignación En la obra; independiente cubre todo;/teams;sí;
+F1.5;F1;Kick-off Comercial → Operaciones;Comercial sella alcance, plazos, margen y adjunta propuesta;/clients;sí;Todas las áreas leen el mismo extracto
+F2.1;F2;Revisión de antecedentes técnicos;Cada área comenta la misma propuesta (ok/ajustes/bloqueo);/demo;sí;Alimenta Conocimiento
+F2.2;F2;Acta de constitución;Juicio del gestor + propuesta final al cliente;/clients;sí;Charter formal no se emite como PDF
+F2.3;F2;Identificación de interesados;Solo el cliente de la obra;/clients;no;Sin matriz poder/interés
+F2.4;F2;Kick-off de partida con el cliente (Día 1);Acuerdos con cliente; abre el cronograma;/clients;sí;Candado de Gantt
+F2.5;F2;Organigrama y RACI;Puestos desde áreas del tenant;/profiles;sí;No se muestran letras RACI en UI
+F3.1;F3;EDT/WBS;Plantilla CSV o alta: paquete, actividad, inspección, hito;/gantt;sí;
+F3.2;F3;Cronograma base;Fechas y línea base por elemento;/gantt;sí;Desvío se edita sin borrar el plan
+F3.3;F3;Presupuesto y curva S;BAC: Finanzas → gestor → visto bueno;/budget;sí;PV/EV/AC en Inicio
+F3.4;F3;Plan de riesgos;Documentado;/demo;no;
+F3.5;F3;Plan de adquisiciones y subcontratos;Hay puestos Bodega y Subcontrato;/demo;no;Sin plan de compras
+F3.6;F3;Plan de calidad;La calidad operativa es la evidencia validada;/evidence;no;
+F3.7;F3;Comunicaciones y recursos;Inicio muestra qué le toca a cada puesto;/demo;no;
+F3.8;F3;Plan de gestión integrado;Suma kickoff + EDT + presupuesto;/demo;no;
+F3.9;F3;Aprobación de línea base;Plan original en cada actividad; freeze pendiente;/baseline;parcial;Placeholder /baseline
+F4.1;F4;Movilización de recursos;Documentado;/gantt;no;
+F4.2;F4;Permisos;Campo de permisos en kickoff interno;/clients;no;Sin bitácora de resoluciones
+F4.3;F4;Compras e importaciones;Pedido de material / despacho;/demo;no;
+F4.4;F4;Contratación de personal;Personas y puestos del tenant;/users;parcial;Sin contratos laborales
+F4.5;F4;Ejecución según EDT;Avance con foto o documento según responsable;/progress;sí;Terreno y escritorio
+F4.6;F4;Subcontratos;Subcontrato reporta solo sus partidas;/progress;sí;
+F4.7;F4;Anticipos y facturación;AC en avance/gastos; Pagos es placeholder;/finance;no;
+F4.8;F4;Aseguramiento de calidad;Validar evidencia de la partida;/evidence;no;
+F4.9;F4;Desarrollo del equipo;Proyecto interno de inducción;/gantt;no;
+F4.10;F4;Informe periódico de avance;Inicio: EV, CPI, SPI, Curva S;/demo;sí;Cortes pendientes
+F5.1;F5;Medición y candado EV;Sin evidencia validada no suma EV;/evidence;sí;Faena y escritorio
+F5.2;F5;Cálculo EVM y Curva S;Motor en Inicio;/demo;sí;
+F5.3;F5;Control SPI/CPI;Semáforos; candado si hay evidencia en revisión;/demo;sí;
+F5.4;F5;Acción correctiva / replan;Editar desvío de fechas conservando línea base;/gantt;parcial;Sin acta de acción correctiva
+F5.5;F5;Variaciones de obra;Se ven como desvío vs línea base;/gantt;no;
+F5.6;F5;Acuerdo económico con el mandante;Documentado;/clients;no;
+F5.7;F5;Cambio de línea base;Freeze/replan v2 pendiente;/baseline;no;
+F5.8;F5;No conformidades;Rechazar evidencia obliga a recargar avance;/evidence;no;Loop F5.1→F4.5
+F5.9;F5;Seguimiento de riesgos;Documentado;/demo;no;
+F5.10;F5;Informe de desempeño;Tablero de Inicio;/demo;sí;
+F5.11;F5;Verificación de cierre de alcance;Sin gate formal a F6;/demo;no;
+F6.1;F6;Pruebas de aceptación;Documentado;/progress;no;
+F6.2;F6;Recepción provisoria;Documentado;/projects;no;
+F6.3;F6;Subsanación de observaciones;Documentado (loop F6.3→F6.2);/progress;no;
+F6.4;F6;TOP al cliente;Documentado; distinto del dossier interno;/knowledge;no;
+F6.5;F6;Recepción final;Documentado;/projects;no;
+F6.6;F6;Liquidación del contrato;Documentado;/finance;no;
+F6.7;F6;Devolución/canje de garantías;Documentado;/finance;no;
+F6.8;F6;Cierre administrativo;Estado Cerrado existe; sin checklist;/projects;no;
+F6.9;F6;Lecciones aprendidas;Comentarios de kickoff en Conocimiento;/knowledge;parcial;Sin correlacionar proyectos
+F6.10;F6;Dossier técnico interno;Documentado;/knowledge;no;
+F7.1;F7;Capacitación a postventa;Documentado;/knowledge;no;
+F7.2;F7;Acta de traspaso a postventa;Documentado;/projects;no;
+F7.3;F7;Activación de garantías;Campo de garantías en kickoff, sin plazos;/clients;no;
+F7.4;F7;Mesa de solicitudes de garantía;Documentado;/demo;no;
+F7.5;F7;Cierre del período de garantía;Documentado;/projects;no;
+F7.6;F7;Liberación final y archivo;Fin del flujo del libro Rev3;/projects;no;

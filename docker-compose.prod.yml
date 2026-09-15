@@ -1,0 +1,16 @@
+# Producción: la API usa Supabase. No se levanta Postgres local.
+#   export SUPABASE_DB_URL='postgresql://postgres.<ref>:<password>@...supabase.com:5432/postgres'
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# La web sigue en :3000; los terceros validan contra el snapshot en Supabase.
+
+services:
+  db:
+    profiles: ["local-db"]
+
+  api:
+    depends_on: []
+    environment:
+      DATABASE_URL: ${SUPABASE_DB_URL:?Defina SUPABASE_DB_URL con la URI de la base de producción}
+      API_DEBUG: "false"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
