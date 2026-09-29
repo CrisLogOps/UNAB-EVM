@@ -29,6 +29,7 @@ export function StartupChecklist({ compact = false }: { compact?: boolean }) {
     () =>
       buildStartupFlow({
         companySize: tenant.companySize,
+        operatingMode: tenant.operatingMode,
         coverageMode: teamCoverageMode(users),
         ownerManagesAll,
         role,
@@ -45,6 +46,7 @@ export function StartupChecklist({ compact = false }: { compact?: boolean }) {
       }),
     [
       tenant.companySize,
+      tenant.operatingMode,
       users,
       ownerManagesAll,
       role,
@@ -61,6 +63,7 @@ export function StartupChecklist({ compact = false }: { compact?: boolean }) {
   );
 
   const pending = flow.steps.filter((item) => !item.done).length;
+  if (!pending) return null;
 
   return (
     <section className="rounded-2xl border border-sky-200 bg-sky-50/80 p-4 sm:p-5">

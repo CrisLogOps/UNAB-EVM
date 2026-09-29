@@ -1,0 +1,1259 @@
+{
+  "source": {
+    "file": "docs/2026-09-13_Flujo_Proceso_Proyecto_Adjudicacion_a_Garantias_Rev3.xlsx",
+    "sheets": [
+      "Resumen_Fases",
+      "Flujo_Detallado",
+      "Leyenda"
+    ],
+    "title": "De la Adjudicación al Traspaso a Postventa/Mantenimiento",
+    "stepCount": 56,
+    "decisionCount": 13,
+    "canonical": true,
+    "note": "Flujo válido de todo proyecto en OpenEVM. Adaptación PMBOK 6/7/8 para administración de contratos; no reproduce texto de PMI."
+  },
+  "parallel": {
+    "F4": "F5",
+    "F5": "F4"
+  },
+  "phases": [
+    {
+      "id": "F1",
+      "name": "Adjudicación y Formalización Contractual",
+      "pmbok": "Pre-Proyecto (previo a Iniciación)",
+      "goal": "Formalizar jurídica y comercialmente la relación contractual, y traspasar el proyecto desde el área Comercial hacia el área Operativa.",
+      "entry": "Notificación de adjudicación recibida.",
+      "exit": "Contrato firmado, garantías constituidas y Kick-off Comercial→Operaciones realizado (acuerdos con el cliente, plazos, costos y margen traspasados).",
+      "stepCount": 5
+    },
+    {
+      "id": "F2",
+      "name": "Inicio del Proyecto",
+      "pmbok": "Iniciación",
+      "goal": "Validar la consistencia técnica de lo vendido, formalizar la autoridad del PM y establecer con el cliente el Día 1 del proyecto.",
+      "entry": "Antecedentes de venta traspasados por el área Comercial (F1.5).",
+      "exit": "Kick-off de Partida realizado con el cliente (Día 1 - inicio oficial), Acta de Constitución aprobada y organigrama/RACI definidos.",
+      "stepCount": 5
+    },
+    {
+      "id": "F3",
+      "name": "Planificación",
+      "pmbok": "Planificación",
+      "goal": "Definir las líneas base de alcance, tiempo y costo, junto con los planes subsidiarios de riesgo, calidad, adquisiciones y comunicaciones.",
+      "entry": "Acta de Constitución aprobada.",
+      "exit": "Línea base del proyecto (alcance-tiempo-costo) aprobada por el patrocinador/mandante.",
+      "stepCount": 9
+    },
+    {
+      "id": "F4",
+      "name": "Ejecución",
+      "pmbok": "Ejecución",
+      "goal": "Ejecutar el trabajo planificado: movilizar recursos, gestionar permisos, compras e importaciones, contratar personal, administrar subcontratos, tramitar anticipos/facturación y asegurar la calidad.",
+      "entry": "Línea base aprobada.",
+      "exit": "Avance físico y financiero reportado periódicamente al proceso de Monitoreo y Control.",
+      "stepCount": 10
+    },
+    {
+      "id": "F5",
+      "name": "Monitoreo y Control",
+      "pmbok": "Monitoreo y Control (concurrente con Ejecución)",
+      "goal": "Medir el desempeño real vs. planificado (EVM/Curva S), gestionar variaciones de obra y cambios (incluyendo su acuerdo económico con el mandante) y activar acciones correctivas cuando corresponda.",
+      "entry": "Reporte periódico de avance desde Ejecución.",
+      "exit": "Verificación de que el 100% del alcance contratado (incluidas variaciones aprobadas) fue completado.",
+      "stepCount": 11
+    },
+    {
+      "id": "F6",
+      "name": "Cierre Contractual y Administrativo",
+      "pmbok": "Cierre",
+      "goal": "Validar y certificar la correcta instalación de lo contratado (por el mandante o un tercero contratado), entregar el Turnover Package (TOP) al cliente para el cierre contractual y operativo, liquidar el contrato y compilar los antecedentes técnicos internos.",
+      "entry": "Alcance completado al 100%.",
+      "exit": "TOP entregado y aceptado por el cliente, contrato liquidado y dossier técnico interno (as-built) completo, listo para el traspaso.",
+      "stepCount": 10
+    },
+    {
+      "id": "F7",
+      "name": "Garantías y Traspaso a Postventa/Mantenimiento",
+      "pmbok": "Post-Cierre / Transición Operacional (extensión práctica del ciclo PMBOK)",
+      "goal": "Traspasar el proyecto al área de Postventa/Mantenimiento, activando tanto la garantía de instalación/ejecución (Operaciones) como la garantía comercial del producto vendido (Comercial), y gestionar el período de garantía hasta su cierre.",
+      "entry": "Dossier técnico interno completo.",
+      "exit": "Garantías (instalación y producto) liberadas y proyecto archivado definitivamente.",
+      "stepCount": 6
+    }
+  ],
+  "steps": [
+    {
+      "id": "F1.1",
+      "phase": "F1",
+      "pmbokGroup": "Pre-Proyecto (previo a Iniciación)",
+      "knowledgeArea": "Adquisiciones / Comercial",
+      "name": "Notificación de Adjudicación",
+      "description": "Recepción de la comunicación formal (oficio/carta) del mandante informando la adjudicación del contrato tras el proceso de licitación u oferta.",
+      "responsible": "Gerente Comercial / Jefe de Licitaciones",
+      "inputs": "Bases de licitación; oferta técnica-económica presentada",
+      "outputs": "Carta/oficio de adjudicación recibido",
+      "requiredEvidence": "Documento de adjudicación (PDF/oficio)",
+      "predecessor": [],
+      "successor": [
+        "F1.2"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo Comercial / Registro de Oportunidades"
+    },
+    {
+      "id": "F1.2",
+      "phase": "F1",
+      "pmbokGroup": "Pre-Proyecto (previo a Iniciación)",
+      "knowledgeArea": "Adquisiciones / Legal-Contractual",
+      "name": "Revisión y Aceptación de Condiciones Contractuales",
+      "description": "Análisis legal y técnico de las cláusulas del contrato (plazos, multas, garantías, forma de pago, alcance) antes de la firma.",
+      "responsible": "Administrador de Contratos / Asesoría Legal",
+      "inputs": "Borrador de contrato; bases administrativas",
+      "outputs": "Contrato revisado y observaciones (si las hay)",
+      "requiredEvidence": "Informe de revisión legal/contractual",
+      "predecessor": [
+        "F1.1"
+      ],
+      "successor": [
+        "F1.3"
+      ],
+      "decision": true,
+      "bifurcation": "Si hay observaciones → vuelve a negociación con el mandante (F1.2); si está conforme → F1.3",
+      "suggestedModule": "Módulo de Gestión Contractual"
+    },
+    {
+      "id": "F1.3",
+      "phase": "F1",
+      "pmbokGroup": "Pre-Proyecto (previo a Iniciación)",
+      "knowledgeArea": "Adquisiciones / Legal-Contractual",
+      "name": "Firma y Formalización del Contrato",
+      "description": "Suscripción del contrato entre las partes y constitución de garantías contractuales (boleta de fiel cumplimiento, anticipo, etc.).",
+      "responsible": "Representante Legal / Gerente General",
+      "inputs": "Contrato revisado y aprobado",
+      "outputs": "Contrato firmado; garantías constituidas",
+      "requiredEvidence": "Contrato firmado; boletas de garantía",
+      "predecessor": [
+        "F1.2"
+      ],
+      "successor": [
+        "F1.4"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Gestión Contractual / Garantías"
+    },
+    {
+      "id": "F1.4",
+      "phase": "F1",
+      "pmbokGroup": "Pre-Proyecto (previo a Iniciación)",
+      "knowledgeArea": "Recursos / Interesados",
+      "name": "Designación del Equipo del Proyecto",
+      "description": "Nombramiento formal del Project Manager/Administrador de Obra y conformación del equipo responsable de la ejecución.",
+      "responsible": "Gerencia de Proyectos / RR.HH.",
+      "inputs": "Contrato firmado; estructura organizacional disponible",
+      "outputs": "Nombramiento de PM y equipo asignado",
+      "requiredEvidence": "Acta de designación / correo formal",
+      "predecessor": [
+        "F1.3"
+      ],
+      "successor": [
+        "F1.5"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo RBAC / Gestión de Roles"
+    },
+    {
+      "id": "F1.5",
+      "phase": "F1",
+      "pmbokGroup": "Pre-Proyecto (previo a Iniciación)",
+      "knowledgeArea": "Integración",
+      "name": "Kick-off Comercial → Operaciones (Traspaso de Venta)",
+      "description": "Reunión de traspaso desde el área Comercial hacia el área Operativa, en la que se revisan los acuerdos alcanzados previamente con el cliente: el alcance vendido, la forma y el plazo de desarrollo, y los costos y el margen de ganancia definidos para la empresa.",
+      "responsible": "Gerente Comercial + PM entrante (Área Operativa)",
+      "inputs": "Expediente de licitación; oferta; contrato; carta de proyecto/venta",
+      "outputs": "Carpeta de antecedentes traspasada (acuerdos comerciales, plazos, costos y margen)",
+      "requiredEvidence": "Acta de Kick-off Comercial-Operaciones / checklist de traspaso",
+      "predecessor": [
+        "F1.4"
+      ],
+      "successor": [
+        "F2.1"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Documentación / Repositorio de Proyecto"
+    },
+    {
+      "id": "F2.1",
+      "phase": "F2",
+      "pmbokGroup": "Iniciación",
+      "knowledgeArea": "Integración",
+      "name": "Revisión de Antecedentes Técnicos y Carta de Proyecto (Área Operativa)",
+      "description": "El área Operativa revisa los antecedentes traspasados por Comercial (carta de proyecto/venta, planos, especificaciones técnicas, normativa vigente) para verificar la consistencia entre lo vendido y lo que efectivamente se ejecutará.",
+      "responsible": "Administrador de Obra / PM (Área Operativa)",
+      "inputs": "Carpeta de antecedentes traspasada (F1.5); planos; especificaciones técnicas; normativa vigente",
+      "outputs": "Antecedentes técnicos validados; observaciones de consistencia (si las hay)",
+      "requiredEvidence": "Checklist de revisión técnica",
+      "predecessor": [
+        "F1.5"
+      ],
+      "successor": [
+        "F2.2"
+      ],
+      "decision": true,
+      "bifurcation": "Si se detectan inconsistencias entre lo vendido y los antecedentes técnicos → se escala a Comercial para aclarar antes de continuar (retorna a F2.1); si es consistente → continúa a F2.2",
+      "suggestedModule": "Módulo de Documentación Técnica"
+    },
+    {
+      "id": "F2.2",
+      "phase": "F2",
+      "pmbokGroup": "Iniciación",
+      "knowledgeArea": "Integración",
+      "name": "Elaboración del Acta de Constitución del Proyecto",
+      "description": "Documento que formaliza la existencia del proyecto, otorga autoridad al PM y define objetivos, alcance macro, hitos y supuestos/restricciones iniciales, sobre la base de los antecedentes técnicos ya validados.",
+      "responsible": "PM",
+      "inputs": "Antecedentes técnicos validados; contrato",
+      "outputs": "Acta de Constitución (Project Charter) aprobada",
+      "requiredEvidence": "Project Charter firmado por el patrocinador",
+      "predecessor": [
+        "F2.1"
+      ],
+      "successor": [
+        "F2.3"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Iniciación de Proyectos"
+    },
+    {
+      "id": "F2.3",
+      "phase": "F2",
+      "pmbokGroup": "Iniciación",
+      "knowledgeArea": "Interesados",
+      "name": "Identificación Preliminar de Interesados",
+      "description": "Levantamiento inicial de las partes interesadas (mandante, subcontratistas, comunidad, entes fiscalizadores) y su nivel de influencia/interés.",
+      "responsible": "PM",
+      "inputs": "Contrato; contexto del proyecto",
+      "outputs": "Registro preliminar de interesados",
+      "requiredEvidence": "Matriz de interesados (poder/interés)",
+      "predecessor": [
+        "F2.2"
+      ],
+      "successor": [
+        "F2.4"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Gestión de Interesados"
+    },
+    {
+      "id": "F2.4",
+      "phase": "F2",
+      "pmbokGroup": "Iniciación",
+      "knowledgeArea": "Comunicaciones / Interesados",
+      "name": "Kick-off de Partida con el Cliente (Día 1 - Inicio Oficial)",
+      "description": "Reunión formal que organiza el PM/Gerente de Proyecto con el cliente para revisar lo informado por el área Comercial respecto de lo comprado (alcance, plazos, condiciones) y validar su consistencia con los antecedentes técnicos (planos, especificaciones, normativa vigente). Esta reunión establece el Día 1 y la partida oficial del proyecto.",
+      "responsible": "PM / Gerente de Proyecto",
+      "inputs": "Acta de Constitución; antecedentes técnicos validados",
+      "outputs": "Acuerdos de partida validados con el cliente; Día 1 establecido",
+      "requiredEvidence": "Acta de Kick-off de Partida firmada (hito: Día 1)",
+      "predecessor": [
+        "F2.3"
+      ],
+      "successor": [
+        "F2.5"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Comunicaciones / Actas / Hitos"
+    },
+    {
+      "id": "F2.5",
+      "phase": "F2",
+      "pmbokGroup": "Iniciación",
+      "knowledgeArea": "Recursos",
+      "name": "Definición de la Estructura Organizacional y Planificación Preliminar de Recursos",
+      "description": "Elaboración del organigrama del proyecto y matriz RACI, y planificación preliminar de los recursos necesarios para desarrollar el proyecto en forma y en plazo, conforme a lo convenido con el área Comercial y la carta de proyecto validada por Operaciones.",
+      "responsible": "PM",
+      "inputs": "Equipo asignado; Kick-off de Partida realizado",
+      "outputs": "Organigrama, matriz RACI y planificación preliminar de recursos",
+      "requiredEvidence": "Organigrama y matriz RACI aprobados",
+      "predecessor": [
+        "F2.4"
+      ],
+      "successor": [
+        "F3.1"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo RBAC / Gestión de Roles"
+    },
+    {
+      "id": "F3.1",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Alcance",
+      "name": "Definición y Validación del Alcance (EDT/WBS)",
+      "description": "Descomposición del alcance del proyecto en una Estructura de Desglose de Trabajo (EDT/WBS) validada con el mandante.",
+      "responsible": "PM + Equipo de Planificación",
+      "inputs": "Project Charter; especificaciones técnicas del contrato",
+      "outputs": "EDT/WBS aprobada; línea base de alcance",
+      "requiredEvidence": "Documento de EDT y diccionario de la EDT",
+      "predecessor": [
+        "F2.5"
+      ],
+      "successor": [
+        "F3.2"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Alcance / EDT"
+    },
+    {
+      "id": "F3.2",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Cronograma",
+      "name": "Elaboración del Cronograma Base",
+      "description": "Secuenciación de actividades, estimación de duraciones y construcción del cronograma (ruta crítica) a partir de la EDT.",
+      "responsible": "Planificador / PM",
+      "inputs": "EDT/WBS; rendimientos históricos",
+      "outputs": "Cronograma base (línea base de tiempo)",
+      "requiredEvidence": "Carta Gantt / diagrama de red aprobado",
+      "predecessor": [
+        "F3.1"
+      ],
+      "successor": [
+        "F3.3"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Cronograma / Motor EVM"
+    },
+    {
+      "id": "F3.3",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Costos",
+      "name": "Elaboración del Presupuesto y Línea Base de Costos",
+      "description": "Estimación de costos por actividad/paquete de trabajo y consolidación de la línea base de costos (Curva S planificada).",
+      "responsible": "Control de Gestión / PM",
+      "inputs": "EDT; cronograma base; precios unitarios del contrato",
+      "outputs": "Presupuesto aprobado; Curva S planificada (PV)",
+      "requiredEvidence": "Presupuesto línea base; Curva S base",
+      "predecessor": [
+        "F3.2"
+      ],
+      "successor": [
+        "F3.4"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo Financiero / Motor EVM (Curva S)"
+    },
+    {
+      "id": "F3.4",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Riesgos",
+      "name": "Plan de Gestión de Riesgos",
+      "description": "Identificación, análisis cualitativo/cuantitativo y planificación de respuesta a los riesgos del proyecto.",
+      "responsible": "PM + Equipo",
+      "inputs": "EDT; cronograma; contexto del proyecto",
+      "outputs": "Matriz de riesgos y plan de respuesta",
+      "requiredEvidence": "Registro de riesgos aprobado",
+      "predecessor": [
+        "F3.3"
+      ],
+      "successor": [
+        "F3.5"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Riesgos"
+    },
+    {
+      "id": "F3.5",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Adquisiciones",
+      "name": "Plan de Gestión de Adquisiciones y Subcontratos",
+      "description": "Definición de qué se comprará/subcontratará, criterios de selección de proveedores y cronograma de adquisiciones.",
+      "responsible": "Administrador de Contratos / Logística",
+      "inputs": "EDT; presupuesto; cronograma",
+      "outputs": "Plan de adquisiciones y subcontratación",
+      "requiredEvidence": "Plan de compras/subcontratos aprobado",
+      "predecessor": [
+        "F3.4"
+      ],
+      "successor": [
+        "F3.6"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Subcontratos / Proveedores"
+    },
+    {
+      "id": "F3.6",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Calidad",
+      "name": "Plan de Gestión de Calidad",
+      "description": "Definición de estándares de calidad aplicables, métricas de control y actividades de aseguramiento de calidad.",
+      "responsible": "Jefe de Calidad / PM",
+      "inputs": "Especificaciones técnicas del contrato",
+      "outputs": "Plan de calidad aprobado",
+      "requiredEvidence": "Plan de gestión de calidad",
+      "predecessor": [
+        "F3.5"
+      ],
+      "successor": [
+        "F3.7"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Calidad"
+    },
+    {
+      "id": "F3.7",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Comunicaciones / Recursos",
+      "name": "Plan de Comunicaciones y Gestión de Recursos",
+      "description": "Definición de canales, frecuencia y formato de informes, y del plan de asignación/adquisición de recursos humanos y materiales.",
+      "responsible": "PM",
+      "inputs": "Matriz de interesados; organigrama",
+      "outputs": "Plan de comunicaciones y plan de recursos",
+      "requiredEvidence": "Plan de comunicaciones; plan de recursos",
+      "predecessor": [
+        "F3.6"
+      ],
+      "successor": [
+        "F3.8"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Comunicaciones / RR.HH."
+    },
+    {
+      "id": "F3.8",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Integración",
+      "name": "Consolidación del Plan de Gestión del Proyecto",
+      "description": "Integración de todos los planes subsidiarios (alcance, cronograma, costos, riesgos, calidad, adquisiciones, comunicaciones) en un único Plan de Gestión del Proyecto.",
+      "responsible": "PM",
+      "inputs": "Planes subsidiarios aprobados",
+      "outputs": "Plan de Gestión del Proyecto consolidado",
+      "requiredEvidence": "Documento integrado del plan de gestión",
+      "predecessor": [
+        "F3.7"
+      ],
+      "successor": [
+        "F3.9"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Planificación Integrada"
+    },
+    {
+      "id": "F3.9",
+      "phase": "F3",
+      "pmbokGroup": "Planificación",
+      "knowledgeArea": "Integración",
+      "name": "Aprobación de la Línea Base del Proyecto",
+      "description": "Validación y aprobación formal (comité/patrocinador/mandante) de las líneas base de alcance, tiempo y costo antes de iniciar la ejecución.",
+      "responsible": "Patrocinador / Comité de Proyecto",
+      "inputs": "Plan de Gestión del Proyecto",
+      "outputs": "Línea base aprobada (baseline)",
+      "requiredEvidence": "Acta de aprobación de línea base",
+      "predecessor": [
+        "F3.8"
+      ],
+      "successor": [
+        "F4.1"
+      ],
+      "decision": true,
+      "bifurcation": "Si se rechaza → vuelve a F3.1 (ajustes de planificación); si se aprueba → F4.1. También recibe el retorno de F5.7 cuando una variación de obra actualiza la línea base.",
+      "suggestedModule": "Módulo de Aprobaciones / Workflow"
+    },
+    {
+      "id": "F4.1",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Recursos",
+      "name": "Movilización de Recursos",
+      "description": "Traslado e instalación de personal, equipos, maquinaria y materiales necesarios para el inicio físico de las actividades, conforme a la planificación preliminar de recursos definida en F2.5.",
+      "responsible": "Administrador de Obra/Terreno",
+      "inputs": "Plan de recursos; cronograma aprobado",
+      "outputs": "Recursos movilizados en terreno",
+      "requiredEvidence": "Acta de instalación de faena / checklist de movilización",
+      "predecessor": [
+        "F3.9"
+      ],
+      "successor": [
+        "F4.2"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Recursos / Logística"
+    },
+    {
+      "id": "F4.2",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Adquisiciones / Legal",
+      "name": "Gestión de Permisos y Permisología",
+      "description": "Gestión y tramitación de los permisos, licencias y autorizaciones normativas requeridas para la ejecución (municipales, sectoriales, ambientales, u otras aplicables), antes o durante el inicio de obra.",
+      "responsible": "Administrador de Contratos / Área Legal",
+      "inputs": "Normativa vigente aplicable; especificaciones del proyecto",
+      "outputs": "Permisos y autorizaciones obtenidos",
+      "requiredEvidence": "Resoluciones/permisos aprobados",
+      "predecessor": [
+        "F4.1"
+      ],
+      "successor": [
+        "F4.3"
+      ],
+      "decision": true,
+      "bifurcation": "Si un permiso es rechazado u observado → se gestiona su subsanación y se reintenta (F4.2); si se aprueba → continúa a F4.3",
+      "suggestedModule": "Módulo de Permisos / Cumplimiento Normativo"
+    },
+    {
+      "id": "F4.3",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Adquisiciones",
+      "name": "Compra de Materiales e Importaciones",
+      "description": "Adquisición de materiales, equipos e insumos necesarios para la ejecución, incluyendo la gestión de procesos de importación cuando corresponda.",
+      "responsible": "Logística / Adquisiciones",
+      "inputs": "Plan de adquisiciones; EDT",
+      "outputs": "Materiales/equipos disponibles en obra",
+      "requiredEvidence": "Órdenes de compra; documentos de importación (según corresponda)",
+      "predecessor": [
+        "F4.2"
+      ],
+      "successor": [
+        "F4.4"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Logística / Adquisiciones"
+    },
+    {
+      "id": "F4.4",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Recursos",
+      "name": "Contratación y Asignación de Recurso Humano",
+      "description": "Selección, contratación y asignación del personal (propio o subcontratado) requerido para el desarrollo e implementación del proyecto.",
+      "responsible": "RR.HH. / Administrador de Obra",
+      "inputs": "Plan de recursos; organigrama del proyecto",
+      "outputs": "Personal contratado y asignado a la obra",
+      "requiredEvidence": "Contratos/asignaciones de personal",
+      "predecessor": [
+        "F4.3"
+      ],
+      "successor": [
+        "F4.5"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de RR.HH."
+    },
+    {
+      "id": "F4.5",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Alcance / Cronograma",
+      "name": "Ejecución de Actividades según EDT/Cronograma",
+      "description": "Desarrollo físico del trabajo planificado, registrando el avance real de cada actividad/paquete de trabajo.",
+      "responsible": "Equipo de Terreno / Operaciones",
+      "inputs": "Cronograma; EDT; instrucciones técnicas",
+      "outputs": "Avance físico registrado; entregables parciales",
+      "requiredEvidence": "Evidencia fotográfica georreferenciada; partes diarios",
+      "predecessor": [
+        "F4.4"
+      ],
+      "successor": [
+        "F4.6"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Terreno / Captura de Evidencia"
+    },
+    {
+      "id": "F4.6",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Adquisiciones",
+      "name": "Gestión de Subcontratos y Proveedores",
+      "description": "Emisión de órdenes de compra/subcontratos, seguimiento de entregas y evaluación de desempeño de proveedores.",
+      "responsible": "Administrador de Contratos",
+      "inputs": "Plan de adquisiciones",
+      "outputs": "Órdenes de compra/subcontratos gestionados",
+      "requiredEvidence": "OC/subcontratos emitidos; estados de pago a proveedores",
+      "predecessor": [
+        "F4.5"
+      ],
+      "successor": [
+        "F4.7"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Subcontratos / Proveedores"
+    },
+    {
+      "id": "F4.7",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Costos",
+      "name": "Gestión de Anticipos y Facturación Mensual",
+      "description": "Tramitación de los anticipos contractuales y elaboración de los estados de pago/facturación mensual conforme al avance, para financiar la implementación del proyecto.",
+      "responsible": "Administrador de Contratos / Finanzas",
+      "inputs": "Avance físico; condiciones de pago del contrato",
+      "outputs": "Estado de pago mensual / factura emitida",
+      "requiredEvidence": "Estado de pago aprobado; factura; anticipo cursado",
+      "predecessor": [
+        "F4.6"
+      ],
+      "successor": [
+        "F4.8"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo Financiero / Facturación"
+    },
+    {
+      "id": "F4.8",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Calidad",
+      "name": "Aseguramiento de Calidad",
+      "description": "Ejecución de inspecciones y auditorías de calidad según el plan definido, para asegurar el cumplimiento de especificaciones.",
+      "responsible": "Jefe de Calidad",
+      "inputs": "Plan de calidad; avance de obra",
+      "outputs": "Registros de inspección; no conformidades detectadas",
+      "requiredEvidence": "Informes de inspección / actas de no conformidad",
+      "predecessor": [
+        "F4.7"
+      ],
+      "successor": [
+        "F4.9"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Calidad"
+    },
+    {
+      "id": "F4.9",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Recursos",
+      "name": "Desarrollo y Gestión del Equipo",
+      "description": "Capacitación, resolución de conflictos y gestión del desempeño del equipo del proyecto durante la ejecución.",
+      "responsible": "PM / RR.HH.",
+      "inputs": "Plan de recursos",
+      "outputs": "Equipo capacitado y con desempeño gestionado",
+      "requiredEvidence": "Registros de capacitación; evaluaciones de desempeño",
+      "predecessor": [
+        "F4.8"
+      ],
+      "successor": [
+        "F4.10"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de RR.HH."
+    },
+    {
+      "id": "F4.10",
+      "phase": "F4",
+      "pmbokGroup": "Ejecución",
+      "knowledgeArea": "Comunicaciones",
+      "name": "Informe Periódico de Avance",
+      "description": "Elaboración y distribución de informes de avance físico y financiero a los interesados clave (mandante, gerencia).",
+      "responsible": "PM",
+      "inputs": "Avance físico registrado; información financiera",
+      "outputs": "Informe de avance periódico",
+      "requiredEvidence": "Informe de avance (semanal/mensual) enviado",
+      "predecessor": [
+        "F4.9"
+      ],
+      "successor": [
+        "F5.1"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Reportería / Dashboard"
+    },
+    {
+      "id": "F5.1",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Cronograma / Costos (EVM)",
+      "name": "Medición del Avance Físico (% Avance)",
+      "description": "Verificación en terreno del porcentaje de avance real de cada actividad, con evidencia validada (candado metodológico).",
+      "responsible": "Administrador de Obra / Control de Proyectos",
+      "inputs": "Partes diarios; evidencia fotográfica georreferenciada",
+      "outputs": "% de avance físico validado",
+      "requiredEvidence": "Evidencia validada (foto + GPS + timestamp)",
+      "predecessor": [
+        "F4.10"
+      ],
+      "successor": [
+        "F5.2"
+      ],
+      "decision": true,
+      "bifurcation": "Si la evidencia no es válida → se bloquea el Valor Ganado (EV) y vuelve a F4.5 para regularizar; si es válida → F5.2",
+      "suggestedModule": "Motor EVM / Candado Metodológico"
+    },
+    {
+      "id": "F5.2",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Costos (EVM)",
+      "name": "Cálculo de Valor Ganado y Curva S (EV, PV, AC)",
+      "description": "Cálculo automático de Valor Planificado, Valor Ganado y Costo Real, y actualización de la Curva S del proyecto.",
+      "responsible": "Motor EVM (sistema) / Control de Proyectos",
+      "inputs": "% avance validado; presupuesto; costos reales",
+      "outputs": "EV, PV, AC; Curva S actualizada",
+      "requiredEvidence": "Reporte EVM del período",
+      "predecessor": [
+        "F5.1"
+      ],
+      "successor": [
+        "F5.3"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Motor EVM (Curva S)"
+    },
+    {
+      "id": "F5.3",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Cronograma / Costos (EVM)",
+      "name": "Control de Cronograma y Costos (Índices SPI/CPI)",
+      "description": "Cálculo de índices de desempeño (SPI, CPI, SV, CV) y proyecciones (EAC, ETC, VAC) para evaluar la salud del proyecto.",
+      "responsible": "Control de Proyectos",
+      "inputs": "EV, PV, AC",
+      "outputs": "Indicadores de desempeño (SPI, CPI, EAC, ETC, VAC)",
+      "requiredEvidence": "Dashboard de indicadores",
+      "predecessor": [
+        "F5.2"
+      ],
+      "successor": [
+        "F5.4"
+      ],
+      "decision": true,
+      "bifurcation": "Si SPI/CPI están fuera de umbral → activa Acción Correctiva (F5.4); si están dentro de umbral → continúa en F5.5",
+      "suggestedModule": "Motor EVM / Dashboard"
+    },
+    {
+      "id": "F5.4",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Integración",
+      "name": "Acción Correctiva / Replanificación",
+      "description": "Definición e implementación de medidas correctivas (recursos adicionales, reprogramación) cuando el proyecto se desvía de la línea base.",
+      "responsible": "PM",
+      "inputs": "Indicadores fuera de umbral",
+      "outputs": "Plan de acción correctiva",
+      "requiredEvidence": "Acta de acción correctiva",
+      "predecessor": [
+        "F5.3"
+      ],
+      "successor": [
+        "F5.5"
+      ],
+      "decision": false,
+      "bifurcation": "Retorna en paralelo a F4.5 (ejecución ajustada) mientras continúa el flujo de control",
+      "suggestedModule": "Módulo de Planificación / Alertas"
+    },
+    {
+      "id": "F5.5",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Integración (Control de Cambios)",
+      "name": "Identificación de Variaciones de Obra (Aumentos/Disminuciones/Adicionales)",
+      "description": "Detección durante la ejecución de variaciones respecto del alcance original (mayores obras, obras adicionales o disminuciones de obra) que requieren tratamiento formal como cambio.",
+      "responsible": "Administrador de Obra / PM",
+      "inputs": "Avance de obra; condiciones de terreno; requerimientos del mandante",
+      "outputs": "Variación de obra identificada y documentada",
+      "requiredEvidence": "Informe de variación / solicitud de aumento-disminución de obra",
+      "predecessor": [
+        "F5.4"
+      ],
+      "successor": [
+        "F5.6"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Gestión de Cambios"
+    },
+    {
+      "id": "F5.6",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Integración (Control de Cambios)",
+      "name": "Negociación del Acuerdo Económico de la Variación con el Mandante",
+      "description": "Negociación con el cliente/mandante del valor económico de la variación (aumento, disminución u obra adicional) y de su eventual impacto en el plazo del proyecto.",
+      "responsible": "PM / Administrador de Contratos",
+      "inputs": "Variación de obra documentada; presupuesto/precios unitarios del contrato",
+      "outputs": "Acuerdo económico de la variación (monto y plazo)",
+      "requiredEvidence": "Acta de acuerdo económico / anexo de contrato",
+      "predecessor": [
+        "F5.5"
+      ],
+      "successor": [
+        "F5.7"
+      ],
+      "decision": true,
+      "bifurcation": "Si no hay acuerdo con el mandante → la variación no se incorpora y el proyecto retorna al monitoreo normal (F5.1); si hay acuerdo → avanza a F5.7 para su formalización",
+      "suggestedModule": "Módulo de Gestión de Cambios / Financiero"
+    },
+    {
+      "id": "F5.7",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Integración (Control de Cambios)",
+      "name": "Gestión de Solicitud de Cambio y Actualización de Líneas Base",
+      "description": "Formalización de la variación acordada ante el comité de control de cambios, y actualización de las líneas base de alcance, cronograma y costo cuando corresponda.",
+      "responsible": "Comité de Control de Cambios",
+      "inputs": "Acuerdo económico de la variación",
+      "outputs": "Cambio aprobado; líneas base actualizadas",
+      "requiredEvidence": "Acta de comité de cambios; línea base actualizada",
+      "predecessor": [
+        "F5.6"
+      ],
+      "successor": [
+        "F5.8"
+      ],
+      "decision": true,
+      "bifurcation": "Si se aprueba → actualiza líneas base (alcance/cronograma/costo) y retorna a F3.9 para fijar el nuevo baseline; si se rechaza → continúa el monitoreo en F5.8",
+      "suggestedModule": "Módulo de Gestión de Cambios"
+    },
+    {
+      "id": "F5.8",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Calidad",
+      "name": "Control de Calidad y No Conformidades",
+      "description": "Verificación del cierre de no conformidades detectadas y seguimiento de acciones correctivas de calidad.",
+      "responsible": "Jefe de Calidad",
+      "inputs": "Registros de no conformidad",
+      "outputs": "No conformidades cerradas",
+      "requiredEvidence": "Registro de cierre de no conformidades",
+      "predecessor": [
+        "F5.7"
+      ],
+      "successor": [
+        "F5.9"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Calidad"
+    },
+    {
+      "id": "F5.9",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Riesgos",
+      "name": "Seguimiento de Riesgos",
+      "description": "Revisión periódica del registro de riesgos, actualización de probabilidad/impacto e identificación de nuevos riesgos.",
+      "responsible": "PM",
+      "inputs": "Registro de riesgos",
+      "outputs": "Registro de riesgos actualizado",
+      "requiredEvidence": "Matriz de riesgos actualizada",
+      "predecessor": [
+        "F5.8"
+      ],
+      "successor": [
+        "F5.10"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Riesgos"
+    },
+    {
+      "id": "F5.10",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Comunicaciones",
+      "name": "Informe de Desempeño del Proyecto",
+      "description": "Consolidación de indicadores EVM, calidad, riesgos y cambios en un informe integral para el mandante y la gerencia.",
+      "responsible": "PM",
+      "inputs": "Indicadores EVM; estado de calidad y riesgos",
+      "outputs": "Informe de desempeño integral",
+      "requiredEvidence": "Informe de desempeño (dashboard/reporte)",
+      "predecessor": [
+        "F5.9"
+      ],
+      "successor": [
+        "F5.11"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Reportería / Dashboard"
+    },
+    {
+      "id": "F5.11",
+      "phase": "F5",
+      "pmbokGroup": "Monitoreo y Control (concurrente con Ejecución)",
+      "knowledgeArea": "Alcance",
+      "name": "Verificación de Cierre de Alcance",
+      "description": "Evaluación periódica de si el 100% del alcance contratado (incluidas las variaciones aprobadas) ha sido completado, para decidir el paso a cierre.",
+      "responsible": "PM",
+      "inputs": "% avance físico; EDT; variaciones aprobadas",
+      "outputs": "Determinación de cierre de alcance",
+      "requiredEvidence": "Checklist de cumplimiento de alcance",
+      "predecessor": [
+        "F5.10"
+      ],
+      "successor": [
+        "F6.1"
+      ],
+      "decision": true,
+      "bifurcation": "Si alcance < 100% → vuelve a F4.5 (continúa la ejecución); si alcance = 100% → avanza a F6.1",
+      "suggestedModule": "Módulo de Alcance / EDT"
+    },
+    {
+      "id": "F6.1",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Calidad",
+      "name": "Pruebas de Aceptación / Puesta en Marcha",
+      "description": "Ejecución de pruebas funcionales/operativas del entregable (commissioning) para verificar su correcto funcionamiento. Cuando el contrato lo exige, estas pruebas pueden ser validadas por un tercero certificador contratado, en lugar del propio mandante.",
+      "responsible": "Equipo Técnico / Calidad (o tercero certificador contratado)",
+      "inputs": "Entregable completado",
+      "outputs": "Resultados de pruebas de aceptación",
+      "requiredEvidence": "Protocolo de pruebas firmado",
+      "predecessor": [
+        "F5.11"
+      ],
+      "successor": [
+        "F6.2"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Calidad / Puesta en Marcha"
+    },
+    {
+      "id": "F6.2",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Alcance / Interesados",
+      "name": "Recepción Provisoria",
+      "description": "Inspección conjunta con el mandante -o con un tercero certificador que este contrate para validar y certificar la correcta instalación- para constatar el cumplimiento del alcance y levantar observaciones pendientes.",
+      "responsible": "Mandante (o tercero certificador contratado) + PM",
+      "inputs": "Resultados de pruebas de aceptación",
+      "outputs": "Acta de recepción provisoria (con o sin observaciones)",
+      "requiredEvidence": "Acta de recepción provisoria firmada",
+      "predecessor": [
+        "F6.1"
+      ],
+      "successor": [
+        "F6.3"
+      ],
+      "decision": true,
+      "bifurcation": "Si hay observaciones → F6.3 (subsanación); si no hay observaciones → pasa directo a F6.4 (TOP)",
+      "suggestedModule": "Módulo de Actas / Cierre"
+    },
+    {
+      "id": "F6.3",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Alcance",
+      "name": "Subsanación de Observaciones",
+      "description": "Corrección de las observaciones levantadas en la recepción provisoria dentro del plazo contractual definido.",
+      "responsible": "Equipo de Terreno",
+      "inputs": "Listado de observaciones (punch list)",
+      "outputs": "Observaciones subsanadas",
+      "requiredEvidence": "Checklist de cierre de observaciones",
+      "predecessor": [
+        "F6.2"
+      ],
+      "successor": [
+        "F6.2"
+      ],
+      "decision": true,
+      "bifurcation": "Se repite hasta que el mandante (o el tercero certificador) valida el cierre de todas las observaciones → retorna a F6.2 para nueva verificación",
+      "suggestedModule": "Módulo de Actas / Cierre"
+    },
+    {
+      "id": "F6.4",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Alcance / Interesados",
+      "name": "Elaboración y Entrega del TOP (Turnover Package) al Cliente",
+      "description": "Compilación y entrega formal al cliente del Turnover Package (TOP): el paquete completo de documentación técnica, operativa y contractual (planos as-built, manuales de operación y mantenimiento, protocolos de pruebas, certificados de calidad y de terceros, permisos, pólizas y garantías) que formaliza el cierre contractual y habilita el cierre operativo del proyecto.",
+      "responsible": "PM + Equipo Técnico",
+      "inputs": "Acta de recepción provisoria sin observaciones pendientes; documentación técnica, de calidad y de garantías del proyecto",
+      "outputs": "TOP entregado y validado por el cliente",
+      "requiredEvidence": "Acta de entrega y recepción del TOP firmada por el cliente",
+      "predecessor": [
+        "F6.2",
+        "F6.3"
+      ],
+      "successor": [
+        "F6.5"
+      ],
+      "decision": true,
+      "bifurcation": "Si el cliente observa documentación faltante o incompleta en el TOP → se completa y se reintenta (F6.4); si el TOP es aceptado → continúa a F6.5 (Recepción Final)",
+      "suggestedModule": "Módulo de Documentación / Turnover Package"
+    },
+    {
+      "id": "F6.5",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Alcance / Interesados",
+      "name": "Recepción Final / Definitiva",
+      "description": "Aceptación formal y definitiva del proyecto por parte del mandante, sin observaciones pendientes y con el TOP ya entregado y aceptado.",
+      "responsible": "Mandante + PM",
+      "inputs": "TOP aceptado por el cliente; observaciones subsanadas (si aplica)",
+      "outputs": "Acta de recepción conforme/definitiva",
+      "requiredEvidence": "Acta de recepción final firmada",
+      "predecessor": [
+        "F6.4"
+      ],
+      "successor": [
+        "F6.6"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Actas / Cierre"
+    },
+    {
+      "id": "F6.6",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Costos / Adquisiciones",
+      "name": "Liquidación del Contrato",
+      "description": "Cálculo y aprobación del estado de pago final, incluyendo eventuales multas, mayores obras/variaciones acordadas o ajustes.",
+      "responsible": "Administrador de Contratos / Finanzas",
+      "inputs": "Acta de recepción final; estados de pago históricos; variaciones aprobadas",
+      "outputs": "Estado de pago final aprobado",
+      "requiredEvidence": "Finiquito / estado de pago final",
+      "predecessor": [
+        "F6.5"
+      ],
+      "successor": [
+        "F6.7"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo Financiero"
+    },
+    {
+      "id": "F6.7",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Adquisiciones / Legal",
+      "name": "Devolución/Canje de Garantías Contractuales",
+      "description": "Gestión de la devolución de la boleta de fiel cumplimiento y, cuando corresponda, canje por boleta de garantía técnica/correcta ejecución.",
+      "responsible": "Administrador de Contratos",
+      "inputs": "Acta de recepción final; finiquito",
+      "outputs": "Garantía de fiel cumplimiento devuelta; garantía técnica vigente",
+      "requiredEvidence": "Comprobante de devolución/canje de boleta",
+      "predecessor": [
+        "F6.6"
+      ],
+      "successor": [
+        "F6.8"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Garantías"
+    },
+    {
+      "id": "F6.8",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Integración",
+      "name": "Cierre Administrativo y Financiero",
+      "description": "Cierre formal de todas las cuentas, contratos con subcontratistas/proveedores y documentación administrativa del proyecto.",
+      "responsible": "PM + Finanzas",
+      "inputs": "Finiquito; contratos con terceros",
+      "outputs": "Proyecto cerrado administrativamente",
+      "requiredEvidence": "Checklist de cierre administrativo",
+      "predecessor": [
+        "F6.7"
+      ],
+      "successor": [
+        "F6.9"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo Financiero / Cierre"
+    },
+    {
+      "id": "F6.9",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Integración",
+      "name": "Lecciones Aprendidas",
+      "description": "Registro estructurado de aprendizajes, buenas prácticas y problemas ocurridos durante el proyecto (incluidas las variaciones de obra) para futuros proyectos.",
+      "responsible": "PM + Equipo",
+      "inputs": "Historial del proyecto (informes, incidencias, variaciones)",
+      "outputs": "Registro de lecciones aprendidas",
+      "requiredEvidence": "Documento de lecciones aprendidas",
+      "predecessor": [
+        "F6.8"
+      ],
+      "successor": [
+        "F6.10"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Conocimiento / Lecciones Aprendidas"
+    },
+    {
+      "id": "F6.10",
+      "phase": "F6",
+      "pmbokGroup": "Cierre",
+      "knowledgeArea": "Alcance / Integración",
+      "name": "Elaboración del Dossier Técnico Interno (As-Built)",
+      "description": "Compilación del dossier técnico interno (equivalente ampliado del TOP) para uso del área de Postventa/Mantenimiento de la propia empresa, que será quien atienda la garantía.",
+      "responsible": "Equipo Técnico",
+      "inputs": "Registros de ejecución; TOP entregado al cliente",
+      "outputs": "Dossier técnico interno / carpeta as-built completa",
+      "requiredEvidence": "Dossier técnico interno entregado",
+      "predecessor": [
+        "F6.9"
+      ],
+      "successor": [
+        "F7.1"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Documentación Técnica"
+    },
+    {
+      "id": "F7.1",
+      "phase": "F7",
+      "pmbokGroup": "Post-Cierre / Transición Operacional (extensión práctica del ciclo PMBOK)",
+      "knowledgeArea": "Recursos",
+      "name": "Capacitación al Equipo de Postventa/Mantenimiento",
+      "description": "Transferencia de conocimiento técnico y operativo al personal que asumirá la operación y mantenimiento del entregable.",
+      "responsible": "Equipo Técnico + Área de Postventa/Mantenimiento",
+      "inputs": "Dossier técnico interno; manuales O&M",
+      "outputs": "Equipo de Postventa/Mantenimiento capacitado",
+      "requiredEvidence": "Registro de capacitación firmado",
+      "predecessor": [
+        "F6.10"
+      ],
+      "successor": [
+        "F7.2"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Capacitación"
+    },
+    {
+      "id": "F7.2",
+      "phase": "F7",
+      "pmbokGroup": "Post-Cierre / Transición Operacional (extensión práctica del ciclo PMBOK)",
+      "knowledgeArea": "Integración",
+      "name": "Acta de Traspaso al Área de Postventa/Mantenimiento",
+      "description": "Entrega formal del proyecto, con toda su documentación, desde el equipo de proyecto (y el área Comercial) hacia el área de Postventa/Mantenimiento, dejando establecidas tanto la garantía de instalación/ejecución (a cargo de Operaciones) como la garantía comercial del producto o equipos vendidos (a cargo del área Comercial).",
+      "responsible": "PM + Jefe de Postventa/Mantenimiento + Área Comercial",
+      "inputs": "Dossier técnico interno; equipo capacitado",
+      "outputs": "Proyecto traspasado formalmente",
+      "requiredEvidence": "Acta de traspaso firmada por las partes",
+      "predecessor": [
+        "F7.1"
+      ],
+      "successor": [
+        "F7.3"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Traspaso / Actas"
+    },
+    {
+      "id": "F7.3",
+      "phase": "F7",
+      "pmbokGroup": "Post-Cierre / Transición Operacional (extensión práctica del ciclo PMBOK)",
+      "knowledgeArea": "Adquisiciones / Legal",
+      "name": "Activación del Período de Garantía (Instalación y Producto)",
+      "description": "Registro formal del inicio y plazo de los períodos de garantía: la garantía técnica/de instalación (ejecutada por Operaciones) y la garantía comercial del producto o equipo vendido (a cargo de Comercial/proveedor), cada una con sus condiciones según el contrato.",
+      "responsible": "Administrador de Contratos + Área Comercial",
+      "inputs": "Acta de recepción final; contrato; condiciones de garantía de proveedores",
+      "outputs": "Períodos de garantía activados en el sistema",
+      "requiredEvidence": "Registro de plazos de garantía / pólizas vigentes",
+      "predecessor": [
+        "F7.2"
+      ],
+      "successor": [
+        "F7.4"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Garantías"
+    },
+    {
+      "id": "F7.4",
+      "phase": "F7",
+      "pmbokGroup": "Post-Cierre / Transición Operacional (extensión práctica del ciclo PMBOK)",
+      "knowledgeArea": "Garantías (Post-Proyecto)",
+      "name": "Gestión de Solicitudes de Garantía",
+      "description": "Recepción, diagnóstico y resolución de fallas o defectos reportados durante el período de garantía, derivando el caso según corresponda a un defecto de instalación (Operaciones) o a un defecto de producto/equipo (proveedor/Comercial).",
+      "responsible": "Área de Postventa/Mantenimiento",
+      "inputs": "Ticket/solicitud de garantía",
+      "outputs": "Falla diagnosticada, derivada y reparada",
+      "requiredEvidence": "Orden de trabajo / ticket cerrado",
+      "predecessor": [
+        "F7.3"
+      ],
+      "successor": [
+        "F7.4"
+      ],
+      "decision": true,
+      "bifurcation": "Se repite por cada solicitud durante el período de garantía; si expira el plazo sin nuevas solicitudes → avanza a F7.5",
+      "suggestedModule": "Módulo de Tickets / Garantías (Mesa de Ayuda)"
+    },
+    {
+      "id": "F7.5",
+      "phase": "F7",
+      "pmbokGroup": "Post-Cierre / Transición Operacional (extensión práctica del ciclo PMBOK)",
+      "knowledgeArea": "Garantías (Post-Proyecto)",
+      "name": "Cierre del Período de Garantía",
+      "description": "Verificación de que los plazos de garantía (instalación y producto) han finalizado y no existen solicitudes pendientes.",
+      "responsible": "Administrador de Contratos",
+      "inputs": "Registro de solicitudes de garantía",
+      "outputs": "Períodos de garantía cerrados",
+      "requiredEvidence": "Informe de cierre de garantía",
+      "predecessor": [
+        "F7.4"
+      ],
+      "successor": [
+        "F7.6"
+      ],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Garantías"
+    },
+    {
+      "id": "F7.6",
+      "phase": "F7",
+      "pmbokGroup": "Post-Cierre / Transición Operacional (extensión práctica del ciclo PMBOK)",
+      "knowledgeArea": "Integración / Adquisiciones",
+      "name": "Liberación Final de Garantías y Cierre Definitivo del Proyecto",
+      "description": "Devolución/liberación de la boleta de garantía técnica y cierre definitivo de todos los antecedentes del proyecto en el sistema.",
+      "responsible": "Administrador de Contratos + PM",
+      "inputs": "Cierre del período de garantía",
+      "outputs": "Proyecto cerrado definitivamente (archivo histórico)",
+      "requiredEvidence": "Comprobante de liberación de garantía técnica",
+      "predecessor": [
+        "F7.5"
+      ],
+      "successor": [],
+      "decision": false,
+      "bifurcation": "",
+      "suggestedModule": "Módulo de Archivo Histórico"
+    }
+  ]
+}

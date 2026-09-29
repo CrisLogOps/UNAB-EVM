@@ -41,7 +41,7 @@ export function TenantStructureStep({
   const [activityOther, setActivityOther] = useState(
     activityType && !ACTIVITY_TYPES.some((item) => item.id === activityType) ? activityType : "",
   );
-  const [size, setSize] = useState<CompanySize | "">(companySize);
+  const [size, setSize] = useState<CompanySize | "">(companySize === "independent" ? "" : companySize);
   const [drafts, setDrafts] = useState<Record<string, AreaDraft>>(() => seedDrafts(areas, users));
   const [selected, setSelected] = useState<string[]>(() =>
     companySize
@@ -169,12 +169,12 @@ export function TenantStructureStep({
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 2 de 4 · Setup 0</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 3 · Setup 0 · colaborativo</p>
         <h1 className="text-xl font-semibold sm:text-2xl">Actividad y áreas</h1>
         <p className="mt-2 text-sm text-slate-600">
           {company || "Tu empresa"}: el tamaño se elige por <strong>cantidad de áreas</strong>, no por
-          facturación. Cada área (salvo Dirección) registra colaboradores y al menos un contacto. Después
-          siguen perfiles y equipo.
+          facturación. Cada área (salvo Dirección) registra colaboradores y al menos un contacto. El
+          modo colaborativo pide 2 o más usuarios.
         </p>
       </div>
 
@@ -209,7 +209,7 @@ export function TenantStructureStep({
       <div>
         <p className="mb-2 text-sm font-medium">Tamaño según áreas existentes</p>
         <div className="grid gap-2 sm:grid-cols-2">
-          {COMPANY_PRESETS.map((item) => {
+          {COMPANY_PRESETS.filter((item) => item.id !== "independent").map((item) => {
             const active = size === item.id;
             return (
               <button
@@ -340,7 +340,7 @@ export function TenantStructureStep({
           onClick={onBack}
           className="rounded-md border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50"
         >
-          Volver a empresa
+          Volver a modo de trabajo
         </button>
         <button
           type="button"

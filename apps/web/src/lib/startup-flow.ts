@@ -1,10 +1,11 @@
 import { ROLE_LABELS } from "./constants";
-import { areaReviewsComplete, areasUserCanReview, evaluateInternalGate, partiesValidated, pendingAreas, proposalReady } from "./kickoff";
+import { areaReviewsComplete, areasUserCanReview, coversKickoffRole, evaluateInternalGate, partiesValidated, pendingAreas, proposalReady } from "./kickoff";
 import type { TeamCoverageMode } from "./coverage";
 import type {
   AtomicPermission,
   Client,
   CompanySize,
+  OperatingMode,
   OrgArea,
   Project,
   ProjectKickoff,
@@ -53,6 +54,7 @@ export interface StartupFlow {
 
 export interface StartupFlowInput {
   companySize: CompanySize | "";
+  operatingMode: OperatingMode | "";
   coverageMode: TeamCoverageMode;
   ownerManagesAll: boolean;
   role: UserRole;
@@ -99,10 +101,16 @@ function isActor(
   return vacantFallback.includes(role);
 }
 
+function isIndependentFlow(input: StartupFlowInput) {
+  if (input.operatingMode === "collaborative") return false;
+  if (input.operatingMode === "individual") return true;
+  return input.companySize === "independent";
+}
+
 function contextCopy(input: StartupFlowInput) {
-  const independent = input.companySize === "independent" || input.coverageMode === "solo";
+  const independent = isIndependentFlow(input);
   if (independent) {
-    return "Como profesional independiente cubres todo el arranque: cliente, proyecto, lo que se vendió, presupuesto y calendario. El control de la obra se enciende cuando eso está listo.";
+    return "Como profesional independiente cubres todo el arranque: cliente, proyecto, lo que se vendió, presupuesto y calendario. El control de la obra se enciende cuando eso está listo. La pestaña Modo permite pasar a colaborativo sin rehacer el alta.";
   }
   if (input.coverageMode === "counterpart") {
     return "Hay contraparte. Cada perfil ve en Inicio lo que le falta; lo demás espera a la otra persona.";
@@ -128,7 +136,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
   const budgetReviewed = Boolean(input.project.bac) || input.project.status === "pending_approval";
   const budgetApproved = Boolean(input.project.bac);
   const scheduleDone = clientKickoffDone && input.scheduleCount > 0;
-  const showTeam = input.companySize !== "independent" && input.coverageMode !== "solo";
+  const showTeam = !isIndependentFlow(input);
   const teamDone = input.assignmentCount > 0;
 
   const drafts: Omit<StartupStep, "current">[] = [
@@ -185,14 +193,14 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
     {
       id: "kickoff_areas",
       code: "F2.1",
-      title: "Validación crítica de las áreas",
-      detail: "Cada área involucrada deja por escrito por qué se justifica el proyecto. Un documento de respaldo es opcional. Sin esas razones no hay kickoff con el cliente.",
+      title: "Revisión de antecedentes técnicos",
+      detail: "Cada área involucrada deja por escrito por qué se justifica el proyecto (F2.1 del flujo Rev3). Un documento de respaldo es opcional. El administrador ve todo y no comenta a nombre de otra área. Sin esas razones no hay kickoff con el cliente.",
       href: "/demo",
       done: areasDone,
       yours:
         commercialDone &&
         !areasDone &&
-        areasUserCanReview(input.sessionUser, input.areas, input.ownerManagesAll).some((area) =>
+        areasUserCanReview(input.sessionUser, input.areas, input.users, input.ownerManagesAll).some((area) =>
           pendingAreas(kickoff ?? { areaReviews: [] } as ProjectKickoff, input.areas).some(
             (pending) => pending.id === area.id,
           ),
@@ -211,7 +219,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
       detail: "El gestor sintetiza el conocimiento de las áreas. Solo cierra si el criterio crítico lo permite.",
       href: "/clients",
       done: pmDone,
-      yours: isActor(input.role, "pmo", input.ownerManagesAll, input.users, ["owner", "pmo"]),
+      yours: coversKickoffRole(input.sessionUser, "pmo", input.users, input.ownerManagesAll),
       waitingOn: waitingLabel(input.users, "pmo", input.ownerManagesAll),
       actionLabel: "Confirmar como gestor",
     },
@@ -298,7 +306,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
 
   const next = steps.find((item) => item.current);
   const controlReady = clientKickoffDone && scheduleDone;
-  const independent = input.companySize === "independent" || input.coverageMode === "solo";
+  const independent = isIndependentFlow(input);
 
   let headline = `Hola, ${ROLE_LABELS[input.role]}`;
   if (next?.yours) headline = `Te toca: ${next.title.toLowerCase()}`;

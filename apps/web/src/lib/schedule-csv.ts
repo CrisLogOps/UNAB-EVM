@@ -224,7 +224,8 @@ export function parseScheduleCsv(text: string): { rows: ScheduleCsvRow[]; errors
       errors.push(`Fila ${lineNo}: la fecha de término no puede ser anterior al inicio.`);
       return;
     }
-    const parentCode = get(cells, "parent").trim();
+    const parentRaw = get(cells, "parent").trim();
+    const parentCode = parentRaw === code ? "" : parentRaw;
     const tipo = get(cells, "kind");
     const kindHint = parseElementKind(tipo);
     const isChild = Boolean(parentCode) || kindHint === "inspeccion" || kindHint === "actividad";
@@ -400,7 +401,7 @@ export function normalizeGanttActivity(
 ): GanttActivity {
   const start = item.start;
   const end = item.end;
-  const parentCode = item.parentCode ?? "";
+  const parentCode = item.parentCode && item.parentCode === (item.code ?? "") ? "" : (item.parentCode ?? "");
   const assigneeRole = item.assigneeRole ?? "";
   const requiresFieldEvidence =
     item.requiresFieldEvidence ?? (Boolean(parentCode) && (assigneeRole === "field" || assigneeRole === ""));
@@ -434,7 +435,7 @@ export function normalizeGanttActivity(
 
 export function childrenOf(activities: GanttActivity[], code: string): GanttActivity[] {
   if (!code) return [];
-  return activities.filter((item) => item.parentCode === code);
+  return activities.filter((item) => item.parentCode === code && item.code !== code);
 }
 
 export function isSummaryActivity(activities: GanttActivity[], item: GanttActivity): boolean {
@@ -449,8 +450,12 @@ export function rolledProgress(
   item: GanttActivity,
   activities: GanttActivity[],
   reports: ProgressReport[] = [],
+  seen: Set<string> = new Set(),
 ): number {
-  const children = childrenOf(activities, item.code);
+  const key = item.id || item.code;
+  if (key && seen.has(key)) return item.progress ?? 0;
+  if (key) seen.add(key);
+  const children = childrenOf(activities, item.code).filter((child) => (child.id || child.code) !== key);
   if (!children.length) {
     const validated = reports.some(
       (report) => report.taskId === item.id && report.evidenceStatus === "validated",
@@ -462,7 +467,8 @@ export function rolledProgress(
   const measurable = children.filter((child) => child.elementKind !== "hito" || child.requiresFieldEvidence);
   const leaves = measurable.filter((child) => !childrenOf(activities, child.code).length);
   const pool = leaves.length ? leaves : measurable.length ? measurable : children;
-  const total = pool.reduce((sum, child) => sum + rolledProgress(child, activities, reports), 0);
+  const nextSeen = new Set(seen);
+  const total = pool.reduce((sum, child) => sum + rolledProgress(child, activities, reports, nextSeen), 0);
   return Math.round(total / pool.length);
 }
 

@@ -10,7 +10,7 @@ import { isFirstOfRole } from "@/lib/handover";
 import type { TenantUser, UserRole } from "@/lib/types";
 
 export function UsersAdminView() {
-  const { users, areas, profiles, assignments, addUser, assignProfile, unassignProfile } = useOrg();
+  const { users, areas, profiles, assignments, addUser, removeUser, assignProfile, unassignProfile } = useOrg();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<TenantUser | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -66,6 +66,13 @@ export function UsersAdminView() {
       <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
         Suma solo a colaboradores que ya conozcas. El correo debe ser corporativo.
       </p>
+
+      {assignableProfiles.length ? null : (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Aún no hay puestos para invitar. En Áreas activa un paquete (empresa pequeña o mayor) o espera a
+          que se carguen los perfiles del modo colaborativo.
+        </p>
+      )}
 
       {notice ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -166,6 +173,25 @@ export function UsersAdminView() {
               );
             },
           },
+          {
+            label: "Quitar de la empresa",
+            variant: "delete",
+            onClick: (row) => {
+              if (row.role === "owner") {
+                setNotice("No se puede quitar al administrador.");
+                return;
+              }
+              if (
+                !window.confirm(
+                  `¿Quitar a ${row.name} de la empresa? Si no queda ningún colaborador, vuelve a estar disponible el modo individual.`,
+                )
+              ) {
+                return;
+              }
+              const ok = removeUser(row.id);
+              setNotice(ok ? `${row.name} ya no está en la empresa.` : "No se pudo quitar a esa persona.");
+            },
+          },
         ]}
       />
 
@@ -182,10 +208,13 @@ export function UsersAdminView() {
             label: "Perfil",
             type: "select",
             required: true,
-            options: assignableProfiles.map((item) => ({
-              value: item.id,
-              label: `${item.name} → ${ROLE_LABELS[item.role]}`,
-            })),
+            options: [
+              { value: "", label: assignableProfiles.length ? "Selecciona un puesto" : "No hay puestos disponibles" },
+              ...assignableProfiles.map((item) => ({
+                value: item.id,
+                label: `${item.name} → ${ROLE_LABELS[item.role]}`,
+              })),
+            ],
           },
         ]}
         onSubmit={(values) => {

@@ -45,6 +45,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 Los terceros validan el mismo producto; los datos viven en Supabase.
 
+## Compartir con un compañero (Railway)
+
+Para una URL pública **sin** proyecto Supabase todavía: [despliegue-railway.md](./despliegue-railway.md). GitHub guarda el código; Railway corre web + API + Postgres. GitHub Pages no sirve para este stack.
+
 ## Kickoff interno (qué se pide)
 
 Las áreas involucradas registran **razones por escrito**. Un archivo de respaldo es **opcional**. Con esos comentarios el gestor cierra el kickoff interno y recién ahí se abre el kickoff con el cliente.

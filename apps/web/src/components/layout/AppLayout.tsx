@@ -11,6 +11,7 @@ import { personLabel } from "@/lib/handover";
 import { HOME_HREF } from "@/lib/startup-flow";
 import { useOrg } from "./OrgProvider";
 import { useRoleContext } from "./RoleProvider";
+import { OperatingModeSwitch } from "./OperatingModeSwitch";
 
 const ENV_FOOTER =
   "OpenEVM · Ambiente local · rama Dev · Seminario de Grado UNAB · Uso académico";
@@ -28,6 +29,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     setSessionUserId,
     nav,
     role,
+    isIndividualMode,
   } = useOrg();
   const [open, setOpen] = useState(false);
 
@@ -114,7 +116,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div className={`mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 ${isIndividualMode ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
             <label className="block min-w-0">
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Empresa</span>
               <select
@@ -144,6 +146,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 )}
               </select>
             </label>
+            <OperatingModeSwitch />
+            {isIndividualMode ? null : (
             <label className="block min-w-0 sm:col-span-2 xl:col-span-1">
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Ver como</span>
               <select
@@ -164,6 +168,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   ))}
               </select>
             </label>
+            )}
           </div>
         </header>
 

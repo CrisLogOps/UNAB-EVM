@@ -28,7 +28,7 @@ export const COMPANY_PRESETS: CompanyPreset[] = [
     roles: ["owner"],
     whatItMeans:
       "Solo Dirección. El representante cubre la operación; no registra áreas ni contactos adicionales.",
-    howPmAdapts: "Los perfiles y el equipo se cierran después, cuando haga falta sumar gente.",
+    howPmAdapts: "El modo individual oculta Personas y Áreas. El cambio a colaborativo está en el panel.",
   },
   {
     id: "small",

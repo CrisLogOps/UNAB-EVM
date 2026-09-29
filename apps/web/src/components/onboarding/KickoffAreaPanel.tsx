@@ -11,7 +11,11 @@ import {
   VERDICT_LABEL,
   areaReviewFor,
   areaReviewsComplete,
+  actsAsSoleOperator,
+  areasNeedingCounterpart,
   areasUserCanReview,
+  counterpartForArea,
+  coversKickoffRole,
   draftFinalProposal,
   emptyProposal,
   evaluateInternalGate,
@@ -53,16 +57,24 @@ export function KickoffAreaPanel({
   } = useOrg();
   const involved = involvedAreas(areas);
   const pending = pendingAreas(kickoff, areas);
-  const writable = areasUserCanReview(sessionUser, areas, ownerManagesAll);
+  const sole = actsAsSoleOperator(users, ownerManagesAll);
+  const writable = areasUserCanReview(sessionUser, areas, users, ownerManagesAll);
   const ready = proposalReady(kickoff.proposal);
   const areasDone = areaReviewsComplete(kickoff, areas);
   const gate = evaluateInternalGate(kickoff, areas);
   const locked = Boolean(kickoff.clientConfirmedAt) || (Boolean(kickoff.pmValidatedAt) && gate.canMeetClient);
-  const canClosePm = sessionUser.role === "owner" || sessionUser.role === "pmo" || ownerManagesAll;
+  const canStampCommercial = coversKickoffRole(sessionUser, "commercial", users, ownerManagesAll);
+  const canClosePm = coversKickoffRole(sessionUser, "pmo", users, ownerManagesAll);
+  const pmCounterpart = users.find((item) => item.active && item.profileId && item.role === "pmo");
+  const missingCounterparts = sole ? [] : areasNeedingCounterpart(areas, users, sessionUser.areaId);
   const [extract, setExtract] = useState(kickoff.proposal.body ?? "");
   const [extractError, setExtractError] = useState<string | null>(null);
 
   function persistExtract() {
+    if (!canStampCommercial) {
+      setExtractError("La propuesta la registra Comercial. El administrador puede verla, no firmarla a nombre de esa área.");
+      return false;
+    }
     const body = extract.trim();
     if (!body) {
       setExtractError("Escribe el extracto para que las áreas evalúen la misma propuesta.");
@@ -97,13 +109,25 @@ export function KickoffAreaPanel({
       <div>
         <h3 className="font-semibold">Kickoff interno · criterio crítico de las áreas</h3>
         <p className="text-xs text-slate-600">
-          Todas las áreas involucradas dejan por escrito las razones que justifican el proyecto. Un documento
-          de respaldo es opcional. Con esos comentarios el gestor toma el kickoff interno y recién ahí se
-          abre el kickoff con el cliente.
+          {sole
+            ? "Eres el único integrante: puedes completar el levantamiento inicial de todas las áreas."
+            : "Hay más integrantes. El administrador registra lo de su área (cliente, obra y dirección) y pide contraparte al resto de áreas de la organización."}{" "}
+          Un documento de respaldo es opcional. Con las razones de cada área el gestor cierra el kickoff interno
+          y recién ahí se abre el del cliente.
         </p>
       </div>
 
       <CriticalGateBoard kickoff={kickoff} gate={gate} involved={involved} />
+
+      {missingCounterparts.length ? (
+        <p className="rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm text-sky-950">
+          Áreas de la organización sin contraparte: {missingCounterparts.map((item) => item.name).join(", ")}.{" "}
+          <Link href="/users" className="font-medium underline">
+            Asignar personas
+          </Link>{" "}
+          para que cada una registre sus razones.
+        </p>
+      ) : null}
 
       {showExtract ? (
         <div className="space-y-2 rounded-lg border border-violet-100 bg-white p-3">
@@ -112,7 +136,7 @@ export function KickoffAreaPanel({
             <textarea
               rows={4}
               value={extract}
-              disabled={locked}
+              disabled={locked || !canStampCommercial}
               onChange={(event) => {
                 setExtract(event.target.value);
                 setExtractError(null);
@@ -122,7 +146,15 @@ export function KickoffAreaPanel({
             />
           </label>
           {extractError ? <p className="text-xs text-red-700">{extractError}</p> : null}
-          {locked ? null : (
+          {canStampCommercial ? null : (
+            <p className="text-xs text-slate-600">
+              {users.some((item) => item.active && item.profileId && item.role === "commercial")
+                ? "El extracto lo registra Comercial. Aquí solo se consulta."
+                : "Comercial es un área de la organización: asigna una contraparte en Personas para que registre el extracto."}{" "}
+              Cambia de puesto en <span className="font-medium">Ver como</span> si ya hay alguien, o espera a esa persona.
+            </p>
+          )}
+          {locked || !canStampCommercial ? null : (
             <button
               type="button"
               onClick={persistExtract}
@@ -154,6 +186,7 @@ export function KickoffAreaPanel({
             canWrite={Boolean(writable.some((item) => item.id === area.id) && ready && !locked)}
             locked={locked}
             reviewer={areaReviewFor(kickoff, area.id)?.userId}
+            waitingOn={counterpartForArea(area, users)}
             users={users}
             lessons={relatedKnowledge(knowledge, area.id, projectId, tenant.activityType)}
             onSave={(input) =>
@@ -179,6 +212,14 @@ export function KickoffAreaPanel({
           canClose={gate.canCloseInternal}
           blockReason={gate.reasons[0]}
         />
+      ) : null}
+
+      {showExtract && areasDone && !locked && !canClosePm ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          Las áreas ya dejaron sus razones. El cierre interno lo registra el gestor de proyectos
+          {pmCounterpart ? ` (${pmCounterpart.name || pmCounterpart.email})` : ""}. El administrador
+          consulta y no confirma a nombre del gestor.
+        </p>
       ) : null}
 
       {showExtract && kickoff.pmValidatedAt ? (
@@ -255,6 +296,7 @@ function AreaCommentRow({
   canWrite,
   locked,
   reviewer,
+  waitingOn,
   users,
   lessons,
   onSave,
@@ -265,6 +307,7 @@ function AreaCommentRow({
   canWrite: boolean;
   locked: boolean;
   reviewer?: string;
+  waitingOn?: TenantUser;
   users: TenantUser[];
   lessons: KnowledgeEntry[];
   onSave: (input: {
@@ -405,6 +448,23 @@ function AreaCommentRow({
         </div>
       ) : !existing && !locked && !ready ? (
         <p className="mt-1 text-xs text-slate-500">Guarda el extracto para habilitar la validación de esta área.</p>
+      ) : !existing && !canWrite && !locked ? (
+        <p className="mt-1 text-xs text-slate-600">
+          {waitingOn ? (
+            <>
+              Pendiente de {area.name}: {waitingOn.name || waitingOn.email} · {ROLE_LABELS[waitingOn.role]}. El
+              administrador no comenta a nombre de esta área.
+            </>
+          ) : (
+            <>
+              {area.name} está en la organización y no tiene contraparte.{" "}
+              <Link href="/users" className="font-medium underline">
+                Solicitar contraparte
+              </Link>
+              .
+            </>
+          )}
+        </p>
       ) : null}
     </li>
   );

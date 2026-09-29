@@ -326,4 +326,5 @@ export const emptyTenant = (): Tenant => ({
   rut: "",
   activityType: "",
   companySize: "",
+  operatingMode: "",
 });

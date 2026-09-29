@@ -9,6 +9,7 @@ export const demoTenant: Tenant = {
   rut: "76.123.456-7",
   activityType: "obras-civiles",
   companySize: "medium",
+  operatingMode: "collaborative",
 };
 
 export const demoProject: Project = {

@@ -71,8 +71,9 @@ export type AlertStatus = "green" | "yellow" | "red";
 export type EvidenceStatus = "missing" | "uploaded" | "validated" | "rejected";
 export type BaselineStatus = "DRAFT" | "FROZEN";
 export type CompanySize = "independent" | "small" | "medium" | "large";
+export type OperatingMode = "individual" | "collaborative";
 
-export type SetupPhase = "register" | "structure" | "raci" | "invites" | "done";
+export type SetupPhase = "register" | "mode" | "structure" | "raci" | "invites" | "done";
 
 export interface StaffInvite {
   id: string;
@@ -148,6 +149,7 @@ export interface Tenant {
   rut: string;
   activityType: string;
   companySize: CompanySize | "";
+  operatingMode: OperatingMode | "";
 }
 
 export interface Client {

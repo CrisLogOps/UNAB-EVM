@@ -4,8 +4,9 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { PLATFORM_COMPONENTS, defaultComponentIds, navFromComponentIds, type NavItem } from "@/lib/components-catalog";
 import { SETUP_STORAGE_KEY, ROLE_LABELS } from "@/lib/constants";
 import { PRESET_ROLES, defaultProfileDraft, type CompanySize } from "@/lib/company-presets";
+import { companySizeForMode, extraCollaborators, filterNavForMode, isIndividualMode, INDIVIDUAL_HIDDEN_COMPONENT_IDS, type OperatingMode } from "@/lib/operating-mode";
 import { DIRECTION_AREA_ID, type AreaDraft } from "@/lib/tenant-setup";
-import { emptyKickoff, emptyProposal, normalizeKickoff, commercialDeliveryReady, pmReviewReady, partiesValidated, areaReviewsComplete, areasUserCanReview, proposalReady, draftFinalProposal, areaReviewValid, evaluateInternalGate } from "@/lib/kickoff";
+import { emptyKickoff, emptyProposal, normalizeKickoff, commercialDeliveryReady, pmReviewReady, partiesValidated, areaReviewsComplete, areasUserCanReview, coversKickoffRole, proposalReady, draftFinalProposal, areaReviewValid, evaluateInternalGate } from "@/lib/kickoff";
 import {
   extraComponentIdsForRole,
   extraPermissionsForRole,
@@ -35,6 +36,7 @@ import type {
   TenantUser,
   UserRole,
 } from "@/lib/types";
+
 import {
   emptyTenant,
   founderDraft,
@@ -57,10 +59,16 @@ export interface StructurePayload {
   areas: AreaDraft[];
 }
 
+export interface OperatingModePayload {
+  operatingMode: OperatingMode;
+  activityType: string;
+}
+
 interface OrgContextValue {
   hydrated: boolean;
   setupPhase: SetupPhase;
   ownerManagesAll: boolean;
+  isIndividualMode: boolean;
   tenant: Tenant;
   clients: Client[];
   invites: StaffInvite[];
@@ -91,6 +99,7 @@ interface OrgContextValue {
   updateProfileTasks: (id: string, extraTaskIds: string[]) => void;
   deleteProfile: (id: string) => boolean;
   addUser: (input: Omit<TenantUser, "id" | "active" | "role" | "areaId" | "introSeen"> & { profileId: string }) => void;
+  removeUser: (userId: string) => boolean;
   assignProfile: (userId: string, profileId: string) => boolean;
   unassignProfile: (userId: string) => boolean;
   addProject: (
@@ -151,8 +160,10 @@ interface OrgContextValue {
   }) => boolean;
   reviewEvidence: (reportId: string, status: Extract<EvidenceStatus, "validated" | "rejected">) => void;
   completeRegister: (payload: RegisterPayload) => void;
+  completeOperatingMode: (payload: OperatingModePayload) => void;
   completeStructure: (payload: StructurePayload) => void;
   confirmRaci: (manageAll?: boolean) => void;
+  switchOperatingMode: (mode: OperatingMode) => void;
   goToSetupPhase: (phase: Exclude<SetupPhase, "done">) => void;
   sendInvite: (name: string, email: string, profileId: string) => boolean;
   finishSetup: () => void;
@@ -226,6 +237,23 @@ function profileFromArea(area: OrgArea): OrgProfile | null {
     componentIds: defaultComponentIds(area.role),
     extraTaskIds: [],
   };
+}
+
+function needsAssignableProfiles(profiles: OrgProfile[]) {
+  return !profiles.some((item) => item.role !== "owner");
+}
+
+function applyCollaborativePack(size: CompanySize, areas: OrgArea[], profiles: OrgProfile[]) {
+  const pack: CompanySize = size === "independent" || !size ? "small" : size;
+  const enabled = new Set(PRESET_ROLES[pack]);
+  const nextAreas = areas.map((area) => ({ ...area, enabled: enabled.has(area.role) }));
+  const next = profiles.map(normalizeProfile);
+  enabled.forEach((role) => {
+    if (next.some((item) => item.role === role)) return;
+    const draft = defaultProfileDraft(role, nextAreas);
+    if (draft) next.push(draft);
+  });
+  return { areas: nextAreas, profiles: applyOwnerCoverage(next) };
 }
 
 function seedTrainingGantt(
@@ -357,6 +385,14 @@ function normalizeTenant(raw: Partial<Tenant> | undefined): Tenant {
     rut: raw.rut ?? "",
     activityType: raw.activityType ?? "",
     companySize: raw.companySize ?? "",
+    operatingMode:
+      raw.operatingMode === "individual" || raw.operatingMode === "collaborative"
+        ? raw.operatingMode
+        : raw.companySize === "independent"
+          ? "individual"
+          : raw.companySize
+            ? "collaborative"
+            : "",
   };
 }
 
@@ -416,7 +452,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const extraPermissions = extraPermissionsForRole(role, users, profiles);
   const ownerBlocked = ownerBlockedPermissions(users, profiles);
   const extraNavIds = extraComponentIdsForRole(role, users, profiles);
-  const ownerManagesAll = handed.length === 0;
+  const individual = isIndividualMode(tenant);
+  const ownerManagesAll = handed.length === 0 || individual;
   const visibleProjects = projectsForUser(
     role,
     sessionUser.id,
@@ -485,6 +522,24 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
+    if (isIndividualMode(tenant)) return;
+    if (!needsAssignableProfiles(profiles)) return;
+    const size = tenant.companySize && tenant.companySize !== "independent" ? tenant.companySize : "small";
+    const next = applyCollaborativePack(size, areas, profiles);
+    if (next.profiles.length <= profiles.length) return;
+    setAreas(next.areas);
+    setProfiles(next.profiles);
+    if (!tenant.companySize || tenant.companySize === "independent") {
+      setTenant((current) => ({
+        ...current,
+        companySize: "small",
+        operatingMode: current.operatingMode || "collaborative",
+      }));
+    }
+  }, [hydrated, tenant, profiles, areas]);
+
+  useEffect(() => {
     if (!hydrated || skipPersist.current) return;
     const payload = {
       setupPhase,
@@ -534,12 +589,15 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   ]);
 
   const navIds = (() => {
+    const hidden = new Set(INDIVIDUAL_HIDDEN_COMPONENT_IDS);
     const ids =
       role === "owner"
         ? [...ALL_COMPONENT_IDS]
         : [...new Set([...(sessionProfile?.componentIds ?? defaultComponentIds(role)), ...extraNavIds])];
     if (role !== "owner" && canExecute(role, "evidence:upload")) ids.push("progress");
-    return ["dashboard" as const, ...ids.filter((id) => id !== "dashboard")];
+    const ordered = ["dashboard" as const, ...ids.filter((id) => id !== "dashboard")];
+    if (!individual) return ordered;
+    return ordered.filter((id) => !hidden.has(id));
   })();
 
   const value = useMemo<OrgContextValue>(
@@ -547,6 +605,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       hydrated,
       setupPhase,
       ownerManagesAll,
+      isIndividualMode: individual,
       tenant,
       clients,
       kickoffs,
@@ -566,10 +625,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       sessionUser,
       role,
       sessionProfile,
-      nav:
+      nav: filterNavForMode(
         role === "owner" || sessionUser.profileId
           ? navFromComponentIds(navIds)
           : [{ href: "/demo", label: "Inicio", group: "hoy" }],
+        individual,
+      ),
       setSessionUserId(id) {
         const next = users.find((item) => item.id === id);
         if (!next) return;
@@ -671,7 +732,20 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         return true;
       },
       toggleArea(id, enabled) {
-        setAreas((current) => current.map((area) => (area.id === id ? { ...area, enabled } : area)));
+        setAreas((current) => {
+          const next = current.map((area) => (area.id === id ? { ...area, enabled } : area));
+          if (enabled) {
+            const area = next.find((item) => item.id === id);
+            if (area && area.role !== "owner") {
+              setProfiles((currentProfiles) => {
+                if (currentProfiles.some((item) => item.role === area.role)) return currentProfiles;
+                const draft = defaultProfileDraft(area.role, next);
+                return draft ? [...currentProfiles, draft] : currentProfiles;
+              });
+            }
+          }
+          return next;
+        });
       },
       addUser(input) {
         const profile = profiles.find((item) => item.id === input.profileId);
@@ -687,6 +761,15 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             introSeen: false,
           },
         ]);
+      },
+      removeUser(userId) {
+        const user = users.find((item) => item.id === userId);
+        if (!user || user.role === "owner") return false;
+        setUsers((current) => current.filter((item) => item.id !== userId));
+        setAssignments((current) => current.filter((item) => item.userId !== userId));
+        setInvites((current) => current.filter((item) => item.email !== user.email));
+        if (sessionUserId === userId) setSessionUserIdState(founderDraft.id);
+        return true;
       },
       addProject(input) {
         const id = `prj-${Date.now()}`;
@@ -819,6 +902,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         );
       },
       stampCommercialKickoff(projectId, patch, userId) {
+        if (!coversKickoffRole(sessionUser, "commercial", users, ownerManagesAll)) return false;
         const existing = kickoffs.find((item) => item.projectId === projectId);
         const project = projects.find((item) => item.id === projectId);
         const kickoff = normalizeKickoff(
@@ -885,7 +969,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         if (!proposalReady(base.proposal)) return false;
         const area = areas.find((item) => item.id === input.areaId);
         if (!area) return false;
-        if (!areasUserCanReview(sessionUser, areas, ownerManagesAll).some((item) => item.id === area.id)) {
+        if (!areasUserCanReview(sessionUser, areas, users, ownerManagesAll).some((item) => item.id === area.id)) {
           return false;
         }
         const now = new Date().toISOString();
@@ -955,6 +1039,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         return true;
       },
       confirmInternalKickoff(projectId, patch, userId) {
+        if (!coversKickoffRole(sessionUser, "pmo", users, ownerManagesAll)) return false;
         const existing = kickoffs.find((item) => item.projectId === projectId);
         const project = projects.find((item) => item.id === projectId);
         const normalized = normalizeKickoff(
@@ -1198,7 +1283,65 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           return [{ ...founder, name: founderName, email: founderEmail, introSeen: true }, ...rest];
         });
         setSessionUserIdState(founderDraft.id);
-        setSetupPhase("structure");
+        setSetupPhase("mode");
+      },
+      completeOperatingMode(payload) {
+        if (payload.operatingMode === "collaborative") {
+          setTenant((current) => ({
+            ...current,
+            operatingMode: "collaborative",
+            activityType: payload.activityType.trim() || current.activityType,
+            companySize: current.companySize === "independent" ? "" : current.companySize,
+          }));
+          setSetupPhase("structure");
+          return;
+        }
+        const activity = payload.activityType.trim();
+        setTenant((current) => ({
+          ...current,
+          activityType: activity,
+          companySize: "independent",
+          operatingMode: "individual",
+        }));
+        const nextAreas = initialAreas.map((area) => ({
+          ...area,
+          enabled: area.id === DIRECTION_AREA_ID,
+          headcount: area.id === DIRECTION_AREA_ID ? 1 : area.headcount,
+        }));
+        const ownerProfile =
+          profiles.find((item) => item.role === "owner") ?? applyOwnerCoverage(initialProfiles)[0];
+        setAreas(nextAreas);
+        setProfiles(applyOwnerCoverage([ownerProfile]));
+        setUsers((current) => {
+          const founder = current.find((item) => item.id === founderDraft.id) ?? founderDraft;
+          return [{ ...founder, areaId: DIRECTION_AREA_ID, profileId: ownerProfile.id, introSeen: true }];
+        });
+        setInvites([]);
+        setSessionUserIdState(founderDraft.id);
+        setSetupPhase("done");
+      },
+      switchOperatingMode(mode) {
+        if (mode === "individual") {
+          if (extraCollaborators(users).length > 0) return;
+          setTenant((current) => ({
+            ...current,
+            operatingMode: "individual",
+            companySize: "independent",
+          }));
+          setSessionUserIdState(founderDraft.id);
+          return;
+        }
+        const size = companySizeForMode("collaborative", tenant.companySize) || "small";
+        setTenant((current) => ({
+          ...current,
+          operatingMode: "collaborative",
+          companySize: size,
+        }));
+        if (needsAssignableProfiles(profiles)) {
+          const next = applyCollaborativePack(size, areas, profiles);
+          setAreas(next.areas);
+          setProfiles(next.profiles);
+        }
       },
       completeStructure(payload) {
         const founderEmail = (users.find((item) => item.id === founderDraft.id)?.email ?? "").toLowerCase();
@@ -1206,6 +1349,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           ...current,
           activityType: payload.activityType.trim(),
           companySize: payload.companySize,
+          operatingMode: payload.companySize === "independent" ? "individual" : "collaborative",
         }));
 
         const selected = payload.areas;
@@ -1287,7 +1431,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         });
         setInvites(contactInvites);
         setSessionUserIdState(founderDraft.id);
-        setSetupPhase("raci");
+        setSetupPhase(payload.companySize === "independent" ? "done" : "raci");
       },
       confirmRaci() {
         setProfiles((current) => applyOwnerCoverage(current));
@@ -1298,11 +1442,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           setSetupPhase(phase);
           return;
         }
-        if (phase === "structure" && tenant.name) {
+        if ((phase === "mode" || phase === "structure") && tenant.name) {
           setSetupPhase(phase);
           return;
         }
-        if ((phase === "raci" || phase === "invites") && tenant.companySize) {
+        if ((phase === "raci" || phase === "invites") && tenant.companySize && tenant.operatingMode !== "individual") {
           setSetupPhase(phase);
         }
       },
@@ -1426,6 +1570,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       handed,
       extraPermissions,
       ownerBlocked,
+      individual,
     ],
   );
 

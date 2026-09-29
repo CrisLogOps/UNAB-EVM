@@ -28,17 +28,17 @@ export function AreasAdminView() {
         <p className="text-xs uppercase tracking-wide text-slate-500">Tamaño de la empresa</p>
         <h1 className="text-2xl font-semibold">Áreas</h1>
         <p className="max-w-3xl text-sm text-slate-600">
-          El tamaño se define por <strong>cantidad de áreas</strong> (independiente, pequeña, mediana o
-          gran empresa). Cada paquete enciende o apaga áreas. Las tareas extra del gerente se marcan en{" "}
+          El tamaño se define por <strong>cantidad de áreas</strong> (pequeña, mediana o gran empresa).
+          Cada paquete enciende o apaga áreas. Las tareas extra del gerente se marcan en{" "}
           <Link href="/profiles" className="underline">
             Puestos
           </Link>
-          .
+          . El modo individual se elige en Empresa o en la pestaña Modo, no aquí.
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {COMPANY_PRESETS.map((preset) => {
+        {COMPANY_PRESETS.filter((item) => item.id !== "independent").map((preset) => {
           const selected = current === preset.id;
           return (
             <button
@@ -72,7 +72,7 @@ export function AreasAdminView() {
 
       {current === "custom" ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          El mix de áreas está personalizado (no coincide exacto con independiente, pequeña, mediana o grande).
+          El mix de áreas está personalizado (no coincide exacto con pequeña, mediana o grande).
         </p>
       ) : null}
 

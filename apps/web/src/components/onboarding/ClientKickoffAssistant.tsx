@@ -14,6 +14,7 @@ import {
   internalReadyForClient,
   pmReviewReady,
   proposalReady,
+  coversKickoffRole,
   evaluateInternalGate,
 } from "@/lib/kickoff";
 import { KickoffAreaPanel } from "@/components/onboarding/KickoffAreaPanel";
@@ -43,6 +44,7 @@ export function ClientKickoffAssistant({
     confirmClientKickoff,
     kickoffFor,
     sessionUser,
+    ownerManagesAll,
   } = useOrg();
 
   const resumed = resumeProjectId ? projects.find((item) => item.id === resumeProjectId) : undefined;
@@ -83,6 +85,10 @@ export function ClientKickoffAssistant({
   const pmDone = Boolean(merged.pmValidatedAt);
   const bothDone = internalReadyForClient(merged, areas);
   const gate = evaluateInternalGate(merged, areas);
+  const canStampCommercial = coversKickoffRole(sessionUser, "commercial", users, ownerManagesAll);
+  const canClosePm = coversKickoffRole(sessionUser, "pmo", users, ownerManagesAll);
+  const pmCounterpart = users.find((item) => item.active && item.profileId && item.role === "pmo");
+  const commercialCounterpart = users.find((item) => item.active && item.profileId && item.role === "commercial");
 
   const steps = useMemo(
     () => [
@@ -192,6 +198,14 @@ export function ClientKickoffAssistant({
 
   function deliverCommercial() {
     if (!projectId) return;
+    if (!canStampCommercial) {
+      setError(
+        commercialCounterpart
+          ? `La propuesta la registra ${commercialCounterpart.name || commercialCounterpart.email} (Comercial). El administrador no la firma a nombre de esa área.`
+          : "La propuesta la registra Comercial.",
+      );
+      return;
+    }
     const payload = { ...kickoffFor(projectId), ...draft } as ProjectKickoff;
     if (!commercialDeliveryReady(payload)) {
       setError("Escribe el extracto de la propuesta. Las fechas del proyecto alcanzan para registrarla.");
@@ -211,6 +225,14 @@ export function ClientKickoffAssistant({
 
   function confirmPm() {
     if (!projectId) return;
+    if (!canClosePm) {
+      setError(
+        pmCounterpart
+          ? `El cierre interno lo confirma ${pmCounterpart.name || pmCounterpart.email} (gestor). El administrador consulta y no confirma a su nombre.`
+          : "El cierre interno lo confirma el gestor de proyectos.",
+      );
+      return;
+    }
     const stored = kickoffFor(projectId);
     const payload = {
       ...stored,
@@ -381,8 +403,8 @@ export function ClientKickoffAssistant({
           <div>
             <h2 className="text-lg font-semibold">Kickoff interno</h2>
             <p className="mt-1 text-sm text-slate-600">
-              1) Extracto de lo vendido. 2) Cada área deja razones por escrito (documento opcional). 3) Con
-              esos comentarios se cierra el kickoff interno y se abre el del cliente.
+              Si eres el único trabajador, cierras el levantamiento. Si hay más integrantes, el administrador
+              deja cliente y obra y cada área de la organización registra su contraparte.
             </p>
           </div>
 
@@ -393,9 +415,10 @@ export function ClientKickoffAssistant({
               <textarea
                 rows={4}
                 value={draft.proposal?.body ?? ""}
+                disabled={commercialDone || !canStampCommercial}
                 onChange={(event) => patchProposal({ body: event.target.value, title: draft.proposal?.title || "Propuesta inicial" })}
                 placeholder="Alcance, plazos, supuestos y exclusiones. Con este texto ya se puede comentar."
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2"
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 disabled:bg-slate-50"
               />
             </label>
             <label className="block text-sm">
@@ -403,17 +426,19 @@ export function ClientKickoffAssistant({
               <input
                 type="file"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,application/pdf"
+                disabled={commercialDone || !canStampCommercial}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) onProposalFile(file);
                 }}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
               />
               {draft.proposal?.fileName ? (
                 <span className="mt-1 block text-xs text-slate-600">Adjunto: {draft.proposal.fileName}</span>
               ) : null}
             </label>
             {!commercialDone ? (
+              canStampCommercial ? (
               <button
                 type="button"
                 onClick={deliverCommercial}
@@ -421,6 +446,13 @@ export function ClientKickoffAssistant({
               >
                 Registrar propuesta
               </button>
+              ) : (
+                <p className="text-xs text-slate-600">
+                  Solicita a Comercial
+                  {commercialCounterpart ? ` (${commercialCounterpart.name || commercialCounterpart.email})` : ""}{" "}
+                  que registre el extracto. El administrador ve el dato y no lo firma a nombre de esa área.
+                </p>
+              )
             ) : (
               <p className="text-xs font-medium text-emerald-800">Propuesta registrada · {personName(merged.commercialDeliveredBy)}</p>
             )}
@@ -490,6 +522,7 @@ export function ClientKickoffAssistant({
                     type="radio"
                     name="pmFit"
                     checked={draft.pmFit === option.id}
+                    disabled={!canClosePm || pmDone}
                     onChange={() => patchDraft({ pmFit: option.id as CommercialFit })}
                     className="mt-1"
                   />
@@ -505,6 +538,7 @@ export function ClientKickoffAssistant({
               <textarea
                 rows={2}
                 value={draft.pmJudgment ?? ""}
+                disabled={!canClosePm || pmDone}
                 onChange={(event) => patchDraft({ pmJudgment: event.target.value })}
                 placeholder="Cómo el conocimiento conjunto de las áreas justifica desarrollar la obra."
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2"
@@ -516,6 +550,7 @@ export function ClientKickoffAssistant({
                 <textarea
                   rows={2}
                   value={draft.pmFulfillmentPlan ?? ""}
+                  disabled={!canClosePm || pmDone}
                   onChange={(event) => patchDraft({ pmFulfillmentPlan: event.target.value })}
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2"
                 />
@@ -526,6 +561,7 @@ export function ClientKickoffAssistant({
               <textarea
                 rows={3}
                 value={draft.finalProposalToClient ?? ""}
+                disabled={!canClosePm || pmDone}
                 onChange={(event) => patchDraft({ finalProposalToClient: event.target.value })}
                 onFocus={() => {
                   if (!draft.finalProposalToClient?.trim()) {
@@ -537,6 +573,7 @@ export function ClientKickoffAssistant({
               />
             </label>
             {!pmDone ? (
+              canClosePm ? (
               <button
                 type="button"
                 disabled={!gate.canCloseInternal || !proposalReady(merged.proposal)}
@@ -545,6 +582,13 @@ export function ClientKickoffAssistant({
               >
                 Confirmar como gestor de proyectos
               </button>
+              ) : (
+                <p className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-amber-950">
+                  Espera al gestor
+                  {pmCounterpart ? ` (${pmCounterpart.name || pmCounterpart.email})` : ""} para el juicio y el
+                  cierre interno. El administrador consulta las razones de las áreas y no confirma a su nombre.
+                </p>
+              )
             ) : (
               <p className="text-xs font-medium text-emerald-800">Gestor confirmó · {personName(merged.pmValidatedBy)}</p>
             )}

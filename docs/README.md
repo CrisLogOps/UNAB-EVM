@@ -15,7 +15,10 @@
 | [templates/seguimiento-semanal.md](./templates/seguimiento-semanal.md) | Plantilla de Issue / coordinación semanal |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | **Aportes de la comunidad** — PR a Dev, revisión, camino a producción |
 | [license-academic.md](./license-academic.md) | **Licencia académica** — checklist; foco MVP, OSI diferido |
+| [flujo-fases-f1-f7.md](./flujo-fases-f1-f7.md) | **Flujo válido del proyecto** — 56 pasos Rev3 (PMBOK adaptado), gates y qué se puede probar |
+| [2026-09-13_Flujo_Proceso_Proyecto_Adjudicacion_a_Garantias_Rev3.xlsx](./2026-09-13_Flujo_Proceso_Proyecto_Adjudicacion_a_Garantias_Rev3.xlsx) | Libro canónico (Resumen_Fases + Flujo_Detallado) |
 | [local-mvp.md](./local-mvp.md) | Arranque local (Docker + API + Next) y SQL de prueba para Supabase |
+| [despliegue-railway.md](./despliegue-railway.md) | **GitHub + Railway** — por qué no Pages/Netlify solo; cómo publicar para trabajar con un compañero |
 | [templates/issues-arranque/](./templates/issues-arranque/) | Textos de Issues para pegar en GitHub (W34 + epic + aviso foco) |
 | [roadmap.md](./roadmap.md) | Cronograma Seminario 1 → Seminario 2 |
 | `api-openapi.yaml` | Contrato OpenAPI (pendiente de generación) |

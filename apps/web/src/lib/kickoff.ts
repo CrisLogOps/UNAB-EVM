@@ -11,6 +11,7 @@ import type {
   ProjectKickoff,
   ProjectStatus,
   TenantUser,
+  UserRole,
 } from "./types";
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -267,13 +268,62 @@ export function evaluateInternalGate(kickoff: ProjectKickoff, areas: OrgArea[]):
   return { verdict, pending, blockers, conditions, reasons, canCloseInternal, canMeetClient };
 }
 
+export function roleIsStaffed(users: TenantUser[], role: UserRole) {
+  return users.some((item) => item.active && item.profileId && item.role === role);
+}
+
+/** Un solo trabajador operativo: no hay otro puesto entregado. El administrador cubre el levantamiento. */
+export function isSoleOperator(users: TenantUser[]) {
+  return !users.some(
+    (item) => item.active && item.profileId && item.role !== "owner" && item.role !== "viewer",
+  );
+}
+
+export function actsAsSoleOperator(users: TenantUser[], ownerManagesAll: boolean) {
+  return ownerManagesAll || isSoleOperator(users);
+}
+
+/** Actúa un rol de kickoff si es ese puesto, o si es el único trabajador. Con más integrantes no cubre vacantes. */
+export function coversKickoffRole(
+  user: TenantUser,
+  preferred: UserRole,
+  users: TenantUser[],
+  ownerManagesAll: boolean,
+) {
+  if (user.role === preferred) return true;
+  if (!actsAsSoleOperator(users, ownerManagesAll)) return false;
+  return user.role === "owner";
+}
+
+export function counterpartForArea(area: OrgArea, users: TenantUser[]) {
+  return users.find(
+    (item) =>
+      item.active &&
+      item.profileId &&
+      item.role !== "owner" &&
+      (item.areaId === area.id || item.role === area.role),
+  );
+}
+
+export function areaHasCounterpart(area: OrgArea, users: TenantUser[]) {
+  return Boolean(counterpartForArea(area, users));
+}
+
+export function areasNeedingCounterpart(areas: OrgArea[], users: TenantUser[], ownerAreaId?: string) {
+  return involvedAreas(areas).filter((area) => {
+    if (area.role === "owner" || area.id === ownerAreaId) return false;
+    return !areaHasCounterpart(area, users);
+  });
+}
+
 export function areasUserCanReview(
   user: TenantUser,
   areas: OrgArea[],
+  users: TenantUser[],
   ownerManagesAll: boolean,
 ) {
   const involved = involvedAreas(areas);
-  if (ownerManagesAll || user.role === "owner" || user.role === "pmo") return involved;
+  if (actsAsSoleOperator(users, ownerManagesAll)) return involved;
   return involved.filter((area) => area.id === user.areaId || area.role === user.role);
 }
 

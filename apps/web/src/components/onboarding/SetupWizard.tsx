@@ -5,25 +5,34 @@ import { useOrg } from "@/components/layout/OrgProvider";
 import { OpenEvmMark } from "@/components/brand/OpenEvmMark";
 import { HandoverConfirm } from "@/components/auth/HandoverConfirm";
 import { TenantStructureStep } from "@/components/onboarding/TenantStructureStep";
+import { OperatingModeStep } from "@/components/onboarding/OperatingModeStep";
 import { SETUP_RESET_QUERY } from "@/lib/constants";
 import { activityTypeLabel } from "@/lib/tenant-setup";
 import { PRESET_LABEL } from "@/lib/company-presets";
 import { isFirstOfRole } from "@/lib/handover";
+import { resolveOperatingMode } from "@/lib/operating-mode";
 import { useState } from "react";
 import type { OrgArea, OrgProfile, TenantUser } from "@/lib/types";
 import type { RegisterPayload } from "@/components/layout/OrgProvider";
 
-const STEPS = [
+const COLLAB_STEPS = [
   { id: "register" as const, label: "Empresa" },
+  { id: "mode" as const, label: "Modo" },
   { id: "structure" as const, label: "Áreas" },
   { id: "raci" as const, label: "Perfiles" },
   { id: "invites" as const, label: "Equipo" },
+];
+
+const INDIVIDUAL_STEPS = [
+  { id: "register" as const, label: "Empresa" },
+  { id: "mode" as const, label: "Modo" },
 ];
 
 export function SetupWizard() {
   const {
     setupPhase,
     completeRegister,
+    completeOperatingMode,
     completeStructure,
     confirmRaci,
     goToSetupPhase,
@@ -39,6 +48,10 @@ export function SetupWizard() {
     sessionUser,
   } = useOrg();
   const router = useRouter();
+  const operatingMode = resolveOperatingMode(tenant);
+  const STEPS = operatingMode === "collaborative" || setupPhase === "structure" || setupPhase === "raci" || setupPhase === "invites"
+    ? COLLAB_STEPS
+    : INDIVIDUAL_STEPS;
 
   const stepIndex = STEPS.findIndex((item) => item.id === setupPhase);
   const assignableProfiles = profiles.filter((item) => item.role !== "owner");
@@ -53,8 +66,9 @@ export function SetupWizard() {
   function canGoTo(index: number) {
     const id = STEPS[index].id;
     if (id === "register") return registered;
-    if (id === "structure") return registered;
-    if (id === "raci" || id === "invites") return structured;
+    if (id === "mode") return registered;
+    if (id === "structure") return registered && operatingMode === "collaborative";
+    if (id === "raci" || id === "invites") return structured && operatingMode !== "individual";
     return false;
   }
 
@@ -62,7 +76,7 @@ export function SetupWizard() {
     <div className="min-h-screen bg-[var(--brand)] text-white">
       <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-3 py-6 sm:px-6 sm:py-8">
         <header className="mb-6 flex items-start justify-between gap-3">
-          <OpenEvmMark variant="light" subtitle="Setup 0 · tenant y áreas" />
+          <OpenEvmMark variant="light" subtitle="Setup 0 · tenant y modo de trabajo" />
           <button
             type="button"
             className="rounded-md border border-white/25 px-2 py-1 text-[11px] text-white/80 hover:bg-white/10 sm:text-xs"
@@ -77,7 +91,7 @@ export function SetupWizard() {
           </button>
         </header>
 
-        <ol className="mb-6 grid grid-cols-4 gap-1 text-[11px] sm:gap-2 sm:text-xs">
+        <ol className={`mb-6 grid gap-1 text-[11px] sm:gap-2 sm:text-xs ${STEPS.length === 2 ? "grid-cols-2" : "grid-cols-5"}`}>
           {STEPS.map((step, index) => {
             const active = setupPhase === step.id;
             const done = stepIndex > index;
@@ -119,6 +133,16 @@ export function SetupWizard() {
             />
           ) : null}
 
+          {setupPhase === "mode" ? (
+            <OperatingModeStep
+              company={tenant.name}
+              activityType={tenant.activityType}
+              operatingMode={operatingMode}
+              onBack={() => goToSetupPhase("register")}
+              onSubmit={(payload) => completeOperatingMode(payload)}
+            />
+          ) : null}
+
           {setupPhase === "structure" ? (
             <TenantStructureStep
               company={tenant.name}
@@ -127,7 +151,7 @@ export function SetupWizard() {
               companySize={tenant.companySize}
               areas={areas}
               users={users}
-              onBack={() => goToSetupPhase("register")}
+              onBack={() => goToSetupPhase("mode")}
               onSubmit={(payload) => completeStructure(payload)}
             />
           ) : null}
@@ -191,11 +215,11 @@ function RegisterStep({
       }}
     >
       <div>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 1 de 4 · Setup 0</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 1 · Setup 0</p>
         <h1 className="text-xl font-semibold sm:text-2xl">Crear el tenant</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Datos de la empresa y de quien la representa. En el paso siguiente se elige la actividad,
-          el tamaño por cantidad de áreas y un contacto por área.
+          Datos de la empresa y de quien la representa. En el paso siguiente eliges si trabajas como
+          profesional independiente o con un equipo colaborativo.
         </p>
       </div>
       <label className="block text-sm">
@@ -251,7 +275,7 @@ function RegisterStep({
           type="submit"
           className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm text-white hover:bg-[var(--brand-dark)]"
         >
-          Continuar a actividad y áreas
+          Continuar a cómo trabajas
         </button>
       </div>
     </form>
@@ -274,7 +298,7 @@ function ProfilesStep({
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 3 de 4</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 4 · colaborativo</p>
         <h1 className="text-xl font-semibold sm:text-2xl">Perfiles</h1>
         <p className="mt-2 text-sm text-slate-600">
           {company}. Estos puestos salen de las áreas que registraste. Revísalos; los contactos ya
@@ -359,7 +383,7 @@ function TeamStep({
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 4 de 4</p>
+        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 5 · colaborativo</p>
         <h1 className="text-xl font-semibold sm:text-2xl">Equipo</h1>
         <p className="mt-2 text-sm text-slate-600">
           Los contactos de cada área ya están. Aquí puedes sumar más gente o cerrar el alta.
@@ -466,8 +490,8 @@ function TeamStep({
       </form>
       ) : (
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          Profesional independiente: solo está Dirección. Si más adelante hay áreas, vuelve a registrarlas
-          en el paso Áreas.
+          Profesional independiente: solo está Dirección. Si más adelante hay equipo, pasa a colaborativo
+          desde el panel (pestaña Modo en Inicio).
         </p>
       )}
 

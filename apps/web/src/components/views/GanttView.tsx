@@ -298,9 +298,9 @@ export function GanttView() {
           { name: "code", label: "Código EDT", type: "text", required: true, placeholder: `${project.code || "CP-001"}.1` },
           {
             name: "parentCode",
-            label: "EDT padre (vacío = paquete o hito de primer nivel)",
+            label: "EDT padre (déjalo vacío si es el primer nivel)",
             type: "text",
-            placeholder: `${project.code || "CP-001"}.1`,
+            placeholder: "Vacío, o el código del paquete del que cuelga",
           },
           {
             name: "elementKind",
@@ -334,11 +334,16 @@ export function GanttView() {
           { name: "budgetPv", label: "Presupuesto planificado (CLP)", type: "number", placeholder: "0" },
         ]}
         onSubmit={(values) => {
-          const parentCode = values.parentCode.trim();
+          const code = values.code.trim();
+          let parentCode = values.parentCode.trim();
+          if (parentCode === code) {
+            parentCode = "";
+            setNotice("EDT padre no puede ser el mismo código que el elemento. Quedó vacío (primer nivel).");
+          }
           const elementKind = (values.elementKind || "actividad") as ScheduleElementKind;
           const requiresFieldEvidence = values.requiresFieldEvidence === "si" || elementKind === "inspeccion";
           addGanttActivity({
-            code: values.code,
+            code,
             parentCode,
             stage: values.stage,
             name: values.name,

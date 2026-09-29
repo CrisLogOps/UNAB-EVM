@@ -2,13 +2,16 @@
 
 import { useRoleContext } from "@/components/layout/RoleProvider";
 import { useOrg } from "@/components/layout/OrgProvider";
+import { OperatingModeSwitch } from "@/components/layout/OperatingModeSwitch";
 import { PRESET_LABEL } from "@/lib/company-presets";
+import { OPERATING_MODE_LABEL, resolveOperatingMode } from "@/lib/operating-mode";
 import { activityTypeLabel } from "@/lib/tenant-setup";
 
 export function TenantSettingsView() {
   const { tenant } = useRoleContext();
   const { sessionUser, areas } = useOrg();
   const enabledAreas = areas.filter((item) => item.enabled);
+  const mode = resolveOperatingMode(tenant);
 
   return (
     <div className="max-w-xl space-y-4">
@@ -16,9 +19,10 @@ export function TenantSettingsView() {
         <p className="text-xs uppercase tracking-wide text-slate-500">Datos de tu empresa</p>
         <h1 className="text-2xl font-semibold">Empresa</h1>
         <p className="text-sm text-slate-600">
-          Tenant creado en el setup 0: representante, RUT, razón social, actividad y áreas.
+          Tenant creado en el setup 0: representante, RUT, razón social, actividad y modo de trabajo.
         </p>
       </div>
+      <OperatingModeSwitch variant="panel" />
       <form className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <label className="block text-sm">
           <span className="mb-1 block font-medium">Nombre del representante</span>
@@ -45,6 +49,15 @@ export function TenantSettingsView() {
           />
         </label>
         <label className="block text-sm">
+          <span className="mb-1 block font-medium">Modo de trabajo</span>
+          <input
+            className="w-full rounded-md border border-slate-200 px-3 py-2"
+            defaultValue={mode ? OPERATING_MODE_LABEL[mode] : "—"}
+            readOnly
+          />
+        </label>
+        {mode === "individual" ? null : (
+        <label className="block text-sm">
           <span className="mb-1 block font-medium">Tamaño (por áreas)</span>
           <input
             className="w-full rounded-md border border-slate-200 px-3 py-2"
@@ -56,6 +69,7 @@ export function TenantSettingsView() {
             readOnly
           />
         </label>
+        )}
         <p className="text-xs text-slate-500">Ambiente local: los cambios no se guardan en servidor.</p>
         <button type="button" className="rounded-md bg-[var(--brand)] px-3 py-2 text-sm text-white hover:bg-[var(--brand-dark)]">
           Guardar

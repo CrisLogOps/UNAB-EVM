@@ -78,6 +78,7 @@ Detalle normativo y técnico:
 | [docs/business-rules.md](./docs/business-rules.md) | Candados EV / laboral, retenciones |
 | [docs/architecture.md](./docs/architecture.md) | ADRs, PWA offline + GPS |
 | [docs/rbac-matrix.md](./docs/rbac-matrix.md) | Matriz de permisos Fase 2 |
+| [docs/flujo-fases-f1-f7.md](./docs/flujo-fases-f1-f7.md) | Flujo válido F1–F7 (libro Rev3) |
 | [docs/versioning.md](./docs/versioning.md) | Tags semanales y nomenclatura por integrante |
 | [docs/integration/](./docs/integration/) | Factibilidad por olas |
 
@@ -111,7 +112,8 @@ Streamlit: Curva S, CPI/SPI, alertas ROJAS
 
 ## Quickstart local
 
-Guía completa para colega y base de prueba: [`docs/local-mvp.md`](./docs/local-mvp.md).
+Guía completa para colega y base de prueba: [`docs/local-mvp.md`](./docs/local-mvp.md).  
+URL pública para trabajar en la misma instancia: [`docs/despliegue-railway.md`](./docs/despliegue-railway.md) (GitHub + Railway; no GitHub Pages).
 
 ```bash
 git clone git@github.com:CrisLogOps/UNAB-EVM.git

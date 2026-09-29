@@ -14,6 +14,7 @@ import { ROLE_LABELS } from "@/lib/constants";
 import { StartupChecklist } from "@/components/onboarding/StartupChecklist";
 import { KickoffAreaPanel } from "@/components/onboarding/KickoffAreaPanel";
 import { ProcessLifecycle } from "@/components/onboarding/ProcessLifecycle";
+import { OperatingModeSwitch } from "@/components/layout/OperatingModeSwitch";
 import { emptyKickoff } from "@/lib/kickoff";
 import type { AlertStatus } from "@/lib/types";
 
@@ -109,6 +110,7 @@ export function DashboardView() {
   const spiValue = selected.pv > 0 ? formatRatio(selected.spi) : "—";
   const cpiStatus: AlertStatus = selected.ac > 0 ? selected.alerts.cpi : "yellow";
   const spiStatus: AlertStatus = selected.pv > 0 ? selected.alerts.spit : "yellow";
+  const controlReady = project.id !== "prj-pending" && project.kickoffPhase === "client_done";
 
   return (
     <div className="space-y-6">
@@ -136,19 +138,7 @@ export function DashboardView() {
         </p>
       </div>
 
-      {project.id !== "prj-pending" && project.kickoffPhase !== "client_done" ? (
-        <KickoffAreaPanel
-          projectId={project.id}
-          kickoff={kickoffFor(project.id) ?? emptyKickoff(project.id, project.clientId)}
-          showExtract
-        />
-      ) : null}
-
-      <StartupChecklist compact />
-
-      <ProcessLifecycle />
-
-      {project.id !== "prj-pending" && project.kickoffPhase === "client_done" ? (
+      {controlReady ? (
         <>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
@@ -260,6 +250,20 @@ export function DashboardView() {
           </section>
         </>
       ) : null}
+
+      {project.id !== "prj-pending" && project.kickoffPhase !== "client_done" ? (
+        <KickoffAreaPanel
+          projectId={project.id}
+          kickoff={kickoffFor(project.id) ?? emptyKickoff(project.id, project.clientId)}
+          showExtract
+        />
+      ) : null}
+
+      <StartupChecklist compact />
+
+      <ProcessLifecycle />
+
+      <OperatingModeSwitch variant="panel" />
     </div>
   );
 }
