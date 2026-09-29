@@ -35,7 +35,7 @@ export async function fetchMvpSnapshot(): Promise<MvpSnapshot | null> {
   }
 }
 
-export async function saveMvpSnapshot(payload: MvpSnapshot) {
+export async function saveMvpSnapshot(payload: unknown) {
   if (!API_URL) return;
   try {
     await fetch(`${API_URL}/api/v1/mvp/snapshot`, {

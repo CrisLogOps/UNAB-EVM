@@ -209,7 +209,8 @@ export function areaReviewValid(review: KickoffAreaReview | undefined) {
   return review.comment.trim().length >= MIN_AREA_JUSTIFICATION;
 }
 
-export function pendingAreas(kickoff: ProjectKickoff, areas: OrgArea[]) {
+export function pendingAreas(kickoff: ProjectKickoff | undefined, areas: OrgArea[]) {
+  if (!kickoff) return involvedAreas(areas);
   return involvedAreas(areas).filter((area) => !areaReviewValid(areaReviewFor(kickoff, area.id)));
 }
 
@@ -260,9 +261,7 @@ export function evaluateInternalGate(kickoff: ProjectKickoff, areas: OrgArea[]):
   const partiesOk = partiesValidated(kickoff);
   const pmOk = pmReviewReady(kickoff);
   const canCloseInternal =
-    (verdict === "go" || (verdict === "conditional" && Boolean(kickoff.pmFulfillmentPlan?.trim()))) &&
-    verdict !== "incomplete" &&
-    verdict !== "nogo";
+    verdict === "go" || (verdict === "conditional" && Boolean(kickoff.pmFulfillmentPlan?.trim()));
   const canMeetClient = canCloseInternal && partiesOk && pmOk;
 
   return { verdict, pending, blockers, conditions, reasons, canCloseInternal, canMeetClient };

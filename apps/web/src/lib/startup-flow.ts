@@ -172,7 +172,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
       detail: "Elige las personas del equipo que trabajarán este proyecto.",
       href: "/teams",
       done: !realProject ? false : teamDone,
-      yours: input.role === "owner" || (input.ownerManagesAll && input.role === "owner"),
+      yours: input.role === "owner",
       waitingOn: waitingLabel(input.users, "owner", input.ownerManagesAll),
       actionLabel: "Asignar equipo",
     });
@@ -201,7 +201,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
         commercialDone &&
         !areasDone &&
         areasUserCanReview(input.sessionUser, input.areas, input.users, input.ownerManagesAll).some((area) =>
-          pendingAreas(kickoff ?? { areaReviews: [] } as ProjectKickoff, input.areas).some(
+          pendingAreas(kickoff, input.areas).some(
             (pending) => pending.id === area.id,
           ),
         ),
