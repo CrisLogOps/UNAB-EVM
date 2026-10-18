@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { MonitorUp, Smartphone } from "lucide-react";
 import { ModalForm } from "@/components/forms/ModalForm";
 import { useOrg } from "@/components/layout/OrgProvider";
@@ -53,7 +54,11 @@ export function ProgressView() {
         <p className="mt-1 max-w-3xl text-sm text-slate-600">
           {project.name} · {project.code}. Carga evidencia desde el computador o, en terreno, con la
           cámara. Solo ves partidas del cronograma asignadas a tu área. El gestor valida y recién ahí
-          cuenta el avance.
+          cuenta el avance. La nota del parte diario también entra al{" "}
+          <Link href="/libro-obra" className="underline">
+            Libro de obra
+          </Link>
+          .
         </p>
       </div>
 
@@ -123,7 +128,7 @@ export function ProgressView() {
           setTargetId(null);
           setMessage(
             ok
-              ? `${target.code || target.name}: evidencia enviada (${file?.name}). Cuenta cuando el gestor la valide.`
+              ? `${target.code || target.name}: evidencia enviada (${file?.name}). Cuenta cuando el gestor la valide. La nota quedó en el Libro de obra.`
               : "No se pudo guardar. Revisa la actividad y el archivo.",
           );
         }}
@@ -158,7 +163,7 @@ function ActivityGroup({
       <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
         {items.length ? (
           items.map((item) => (
-            <li key={item.id} className="flex items-start justify-between gap-3 px-3 py-3">
+            <li key={item.id} className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
                   {item.stage || "General"} · {item.code || "s/c"} · {ELEMENT_KIND_LABELS[item.elementKind]}
@@ -173,7 +178,7 @@ function ActivityGroup({
                 type="button"
                 disabled={!canEdit}
                 onClick={() => onUpload(item.id)}
-                className="shrink-0 rounded-md bg-[var(--brand)] px-3 py-2 text-xs text-white disabled:opacity-40"
+                className="min-h-11 w-full rounded-md bg-[var(--brand)] px-3 py-2 text-xs text-white disabled:opacity-40 sm:w-auto sm:shrink-0"
               >
                 {canEdit ? "Cargar evidencia" : "Solo consulta"}
               </button>

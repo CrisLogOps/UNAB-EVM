@@ -7,13 +7,17 @@ import { Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 function SetupPageInner() {
-  const { hydrated, setupPhase, resetOnboarding } = useOrg();
+  const { hydrated, identity, setupPhase, resetOnboarding } = useOrg();
   const router = useRouter();
   const searchParams = useSearchParams();
   const resetOnce = useRef(false);
 
   useEffect(() => {
     if (!hydrated) return;
+    if (!identity || identity.path !== "new-org") {
+      router.replace("/login");
+      return;
+    }
     if (searchParams.get(SETUP_RESET_QUERY) === "1" && !resetOnce.current) {
       resetOnce.current = true;
       resetOnboarding();
@@ -21,7 +25,7 @@ function SetupPageInner() {
       return;
     }
     if (setupPhase === "done") router.replace("/demo");
-  }, [hydrated, setupPhase, router, searchParams, resetOnboarding]);
+  }, [hydrated, identity, setupPhase, router, searchParams, resetOnboarding]);
 
   if (!hydrated) {
     return (
@@ -31,7 +35,7 @@ function SetupPageInner() {
     );
   }
 
-  if (setupPhase === "done") return null;
+  if (!identity || identity.path !== "new-org" || setupPhase === "done") return null;
   return <SetupWizard />;
 }
 

@@ -49,7 +49,8 @@ export type PlatformComponentId =
   | "evidence"
   | "progress"
   | "costs"
-  | "knowledge";
+  | "knowledge"
+  | "workbook";
 
 export type ComponentMode = "view" | "execute" | "approve";
 
@@ -141,6 +142,44 @@ export interface GanttActivity {
   baselineFinish: string;
 }
 
+export type SignatureProviderId = "" | "ecert" | "acepta" | "toc" | "firmagob" | "other";
+export type ErpPlatformId = "" | "softland" | "defontana" | "nubox" | "manager" | "sap" | "bsale" | "other";
+export type SiiInvoiceMode = "" | "honorarios" | "factura_electronica" | "ambos";
+
+/** Antecedentes de firma electrónica avanzada (FEA). La conexión real va en una versión posterior. */
+export interface ElectronicSignatureAntecedent {
+  hasCertificate: boolean;
+  provider: SignatureProviderId;
+  providerOther: string;
+  holder: string;
+  expiresOn: string;
+  usedFor: string;
+}
+
+/** Antecedentes de SII. No se guarda clave tributaria; solo si existe y cómo se usaría. */
+export interface SiiAntecedent {
+  hasSiiAccess: boolean;
+  invoiceMode: SiiInvoiceMode;
+  office: string;
+  notes: string;
+}
+
+/** ERP u otra plataforma de la organización que ya publique al SII. */
+export interface ErpAntecedent {
+  hasErp: boolean;
+  platform: ErpPlatformId;
+  platformOther: string;
+  postsToSii: boolean;
+  modules: string;
+}
+
+export interface TenantIntegrations {
+  signature: ElectronicSignatureAntecedent;
+  sii: SiiAntecedent;
+  erp: ErpAntecedent;
+  updatedAt: string | null;
+}
+
 export interface Tenant {
   id: string;
   name: string;
@@ -150,6 +189,7 @@ export interface Tenant {
   activityType: string;
   companySize: CompanySize | "";
   operatingMode: OperatingMode | "";
+  integrations: TenantIntegrations;
 }
 
 export interface Client {
@@ -227,7 +267,12 @@ export interface ProjectKickoff {
   permits: string;
   workingAgreement: string;
   teamValidatedUserIds: string[];
+  /** Respuestas del criterio PMBOK (modo individual). Clave = id de pregunta. */
+  internalEvalAnswers: Record<string, string>;
+  /** Fecha de la consulta interna a las áreas. */
   internalDate: string;
+  /** Plazo para el kickoff con el cliente, fijado en la consulta. */
+  clientKickoffDueDate: string;
   internalNotes: string;
   pmFit: CommercialFit;
   pmJudgment: string;
@@ -260,6 +305,8 @@ export interface Project {
   proposedBac: number | null;
   counterBac: number | null;
   budgetNote: string;
+  /** Cronograma cargado desde la plantilla EDT; hay que editarlo y volver a subirlo. */
+  scheduleExample: boolean;
 }
 
 export interface Task {
@@ -273,6 +320,47 @@ export interface Task {
   weight: number;
   unit?: string;
   qty?: number;
+}
+
+export type WorkBookKind = "ito" | "progress" | "safety" | "third_party";
+export type WorkBookSource = "manual" | "progress";
+export type WorkBookSafetyLevel = "" | "observation" | "incident" | "accident";
+export type WorkBookThirdPartyKind = "" | "claim" | "interference";
+
+/** Carátula del libro: datos mínimos para una copia de fiscalización. */
+export interface WorkBookMeta {
+  projectId: string;
+  location: string;
+  contractNumber: string;
+  itoName: string;
+  contractorRep: string;
+}
+
+/** Expediente contractual de faena (libro de obra). */
+export interface WorkBookEntry {
+  id: string;
+  projectId: string;
+  folio: number;
+  kind: WorkBookKind;
+  occurredOn: string;
+  occurredTime: string;
+  recordedAt: string;
+  recordedBy: string;
+  body: string;
+  evidenceFileName: string;
+  evidenceFileType: string;
+  evidenceFileSize: number;
+  source: WorkBookSource;
+  sourceReportId: string;
+  issuer: string;
+  reference: string;
+  dueOn: string;
+  safetyLevel: WorkBookSafetyLevel;
+  location: string;
+  weather: string;
+  thirdPartyKind: WorkBookThirdPartyKind;
+  thirdPartyName: string;
+  activityId: string;
 }
 
 export interface ProgressReport {

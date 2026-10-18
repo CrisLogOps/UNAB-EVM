@@ -34,6 +34,7 @@ export function ProcessLifecycle() {
     gantt,
     reports,
     knowledge,
+    workBook,
     tenant,
   } = useOrg();
   const phases = useMemo(
@@ -48,6 +49,7 @@ export function ProcessLifecycle() {
         activities: gantt.filter((item) => item.projectId === project.id),
         reports,
         knowledge,
+        workBook,
         independent: isIndividualMode(tenant),
       }),
     [
@@ -60,6 +62,7 @@ export function ProcessLifecycle() {
       gantt,
       reports,
       knowledge,
+      workBook,
       tenant.companySize,
       tenant.operatingMode,
     ],
@@ -84,13 +87,13 @@ export function ProcessLifecycle() {
         {BOOK_DECISION_IDS.length} puntos de decisión. Fuente: {PROCESS_SOURCE.file}.
       </p>
 
-      <div className="mt-4 grid grid-cols-4 gap-2 lg:grid-cols-8">
+      <div className="mt-4 flex gap-2 overflow-x-auto pb-1 lg:grid lg:grid-cols-8 lg:overflow-visible">
         {phases.map((phase) => (
           <button
             key={phase.id}
             type="button"
             onClick={() => setOpenId((currentId) => (currentId === phase.id ? null : phase.id))}
-            className={`rounded-lg border px-2 py-2 text-left ${
+            className={`min-w-[4.5rem] shrink-0 rounded-lg border px-2 py-2 text-left lg:min-w-0 ${
               phase.id === expanded
                 ? "border-sky-400 bg-sky-50"
                 : phase.id === current?.id

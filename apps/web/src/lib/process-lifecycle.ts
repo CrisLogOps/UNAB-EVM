@@ -1,4 +1,4 @@
-import { areaReviewsComplete, partiesValidated, proposalReady } from "./kickoff";
+import { areaReviewsComplete, collaborativeInternalReady, individualInternalReady, partiesValidated, proposalReady } from "./kickoff";
 import book from "./process-rev3.json";
 import type {
   GanttActivity,
@@ -9,6 +9,7 @@ import type {
   ProjectKickoff,
   ProjectAssignment,
   Client,
+  WorkBookEntry,
 } from "./types";
 
 /** Estado de un paso del flujo Rev3 respecto de esta obra. */
@@ -60,6 +61,7 @@ export interface LifecycleContext {
   activities: GanttActivity[];
   reports: ProgressReport[];
   knowledge: KnowledgeEntry[];
+  workBook: WorkBookEntry[];
   independent: boolean;
 }
 
@@ -214,9 +216,9 @@ const OPENEVM_RUNTIME: Record<string, RuntimeHint> = {
     inOpenEvm: "Paso del flujo válido. No hay acta de instalación de faena para prueba.",
   },
   "F4.2": {
-    href: "/clients",
-    readyForTest: false,
-    inOpenEvm: "Permisos se pueden anotar en el kickoff interno. Gate de rechazo/subsanación de resoluciones no está. No es gestión de riesgos (eso es F3.4 / F5.9).",
+    href: "/libro-obra",
+    readyForTest: true,
+    inOpenEvm: "Interferencias y reclamos de terceros se anotan en el Libro de obra. El gate de permisos municipales (rechazo → reintenta) sigue pendiente.",
   },
   "F4.3": {
     href: "/demo",
@@ -231,7 +233,7 @@ const OPENEVM_RUNTIME: Record<string, RuntimeHint> = {
   "F4.5": {
     href: "/progress",
     readyForTest: true,
-    inOpenEvm: "Avance: terreno sube foto y las otras áreas suben PDF o planilla según el responsable del cronograma.",
+    inOpenEvm: "Avance: terreno sube foto y las otras áreas suben PDF o planilla. La nota del parte diario alimenta el Libro de obra.",
   },
   "F4.6": {
     href: "/progress",
@@ -244,9 +246,9 @@ const OPENEVM_RUNTIME: Record<string, RuntimeHint> = {
     inOpenEvm: "Pagos es placeholder. El costo real (AC) se anota al cargar avance o en Gastos.",
   },
   "F4.8": {
-    href: "/evidence",
-    readyForTest: false,
-    inOpenEvm: "Hoy equivale a validar la evidencia. No hay actas de no conformidad aparte.",
+    href: "/libro-obra",
+    readyForTest: true,
+    inOpenEvm: "El Libro de obra registra observaciones de calidad/seguridad. Las no conformidades formales siguen pendientes.",
   },
   "F4.9": {
     href: "/gantt",
@@ -464,6 +466,10 @@ function completionOf(id: string, ctx: LifecycleContext): "done" | "partial" | "
   const validated = projectReports.some((item) => item.evidenceStatus === "validated");
   const deviation = ctx.activities.some((item) => item.start !== item.baselineStart || item.end !== item.baselineFinish);
   const knowledgeHere = ctx.knowledge.some((item) => item.projectId === ctx.project.id);
+  const bookHere = ctx.workBook.filter((item) => item.projectId === ctx.project.id);
+  const safetyHere = bookHere.some((item) => item.kind === "safety");
+  const itoHere = bookHere.some((item) => item.kind === "ito");
+  const thirdHere = bookHere.some((item) => item.kind === "third_party");
 
   switch (id) {
     case "F0.1":
@@ -486,11 +492,19 @@ function completionOf(id: string, ctx: LifecycleContext): "done" | "partial" | "
     case "F1.5":
       return commercial ? "done" : "empty";
     case "F2.1":
-      if (areasOk) return "done";
-      if (kickoff && kickoff.areaReviews.length) return "partial";
+      if (ctx.independent) {
+        if (kickoff && individualInternalReady(kickoff)) return "done";
+        if (commercial) return "partial";
+        return "empty";
+      }
+      if (kickoff && (kickoff.internalDate || kickoff.areaReviews.length)) return areasOk ? "done" : "partial";
+      if (commercial) return "partial";
       return "empty";
     case "F2.2":
-      return pmOk ? "done" : "empty";
+      if (ctx.independent) return pmOk ? "done" : "empty";
+      if (kickoff && collaborativeInternalReady(kickoff)) return "done";
+      if (kickoff?.internalNotes?.trim() || kickoff?.internalDate) return "partial";
+      return "empty";
     case "F2.3":
       return clientOk ? "partial" : "empty";
     case "F2.4":
@@ -508,13 +522,18 @@ function completionOf(id: string, ctx: LifecycleContext): "done" | "partial" | "
       if (ctx.project.baselineStatus === "FROZEN") return "done";
       if (hasLeaves) return "partial";
       return "empty";
+    case "F4.2":
+      if (itoHere || thirdHere) return "partial";
+      return "empty";
     case "F4.4":
       return ctx.setupDone ? "done" : "empty";
     case "F4.5":
     case "F4.6":
       if (validated) return "done";
-      if (uploaded) return "partial";
+      if (uploaded || bookHere.some((item) => item.kind === "progress")) return "partial";
       return "empty";
+    case "F4.8":
+      return safetyHere ? "partial" : "empty";
     case "F4.10":
     case "F5.2":
     case "F5.3":

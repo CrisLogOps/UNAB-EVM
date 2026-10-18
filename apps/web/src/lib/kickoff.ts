@@ -26,9 +26,9 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
 
 export const KICKOFF_PHASE_LABEL: Record<KickoffPhase, string> = {
   none: "Sin kickoff",
-  internal_pending: "Comercial entrega la propuesta",
-  awaiting_areas: "Áreas validan",
-  awaiting_pm: "Gestor cierra",
+  internal_pending: "Extracto de lo vendido",
+  awaiting_areas: "Áreas comentan",
+  awaiting_pm: "Consulta en curso",
   internal_done: "Listo para el cliente",
   client_done: "Proyecto iniciado",
 };
@@ -51,15 +51,69 @@ export const REVIEW_STANCE_OPTIONS: { id: KickoffReviewStance; label: string; hi
   },
 ];
 
-export const MIN_AREA_JUSTIFICATION = 60;
+export const MIN_AREA_JUSTIFICATION = 20;
+export const MIN_INDIVIDUAL_EVAL = 20;
+
+export interface IndividualKickoffQuestion {
+  id: string;
+  knowledgeArea: string;
+  question: string;
+  hint: string;
+}
+
+/** Criterio PMBOK para kickoff interno sin contrapartes de área. */
+export const INDIVIDUAL_KICKOFF_QUESTIONS: IndividualKickoffQuestion[] = [
+  {
+    id: "integration",
+    knowledgeArea: "Integración",
+    question: "¿Cuál es el objetivo del proyecto y cómo sabrás que se cumplió lo vendido?",
+    hint: "Criterio de éxito en una o dos frases, alineado a la propuesta comercial.",
+  },
+  {
+    id: "scope",
+    knowledgeArea: "Alcance",
+    question: "¿Qué está incluido en lo vendido y qué queda explícitamente fuera?",
+    hint: "Límites del trabajo. Esto se valida con el cliente en el Día 1.",
+  },
+  {
+    id: "schedule",
+    knowledgeArea: "Cronograma",
+    question: "¿Las fechas vendidas son realistas para ejecutarlo sin equipo interno en la plataforma?",
+    hint: "Hitos, holguras y qué hay que confirmar con el mandante.",
+  },
+  {
+    id: "cost",
+    knowledgeArea: "Costos",
+    question: "¿Con qué presupuesto de control vas a medir el costo de la obra?",
+    hint: "Monto o criterio (BAC / estimado). No hay Finanzas aparte: lo defines tú.",
+  },
+  {
+    id: "quality",
+    knowledgeArea: "Calidad",
+    question: "¿Qué evidencias vas a conservar para demostrar al cliente el cumplimiento?",
+    hint: "Fotos, actas, mediciones. Es el repositorio contractual, no una aprobación de un tercero interno.",
+  },
+  {
+    id: "risk",
+    knowledgeArea: "Riesgos",
+    question: "¿Qué supuestos o riesgos debes validar en el kickoff con el cliente?",
+    hint: "Permisos, acceso a faena, interferencias, pagos, clima, terceros en terreno.",
+  },
+  {
+    id: "stakeholders",
+    knowledgeArea: "Interesados",
+    question: "¿Quién es la contraparte del cliente y cómo se comunican los acuerdos?",
+    hint: "Nombre o rol en el mandante, canal y frecuencia. No hay interesados internos que firmen aquí.",
+  },
+];
 
 export type KickoffVerdict = "incomplete" | "nogo" | "conditional" | "go";
 
 export const VERDICT_LABEL: Record<KickoffVerdict, string> = {
-  incomplete: "Validación incompleta",
+  incomplete: "Consulta en curso",
   nogo: "No se puede pasar al cliente",
-  conditional: "Pase condicionado a ajustes",
-  go: "Criterio crítico aprobado",
+  conditional: "Comentarios pendientes",
+  go: "Listo para el kickoff con el cliente",
 };
 
 export interface InternalKickoffGate {
@@ -131,7 +185,9 @@ export function emptyKickoff(projectId: string, clientId: string): ProjectKickof
     permits: "",
     workingAgreement: "",
     teamValidatedUserIds: [],
+    internalEvalAnswers: {},
     internalDate: "",
+    clientKickoffDueDate: "",
     internalNotes: "",
     pmFit: "",
     pmJudgment: "",
@@ -153,6 +209,7 @@ export function normalizeKickoff(raw: Partial<ProjectKickoff> | undefined, proje
     projectId: raw?.projectId ?? projectId,
     clientId: raw?.clientId ?? clientId,
     teamValidatedUserIds: raw?.teamValidatedUserIds ?? [],
+    internalEvalAnswers: normalizeEvalAnswers(raw?.internalEvalAnswers),
     commercialDeliveredAt: raw?.commercialDeliveredAt ?? null,
     proposal: {
       ...emptyProposal(),
@@ -164,6 +221,8 @@ export function normalizeKickoff(raw: Partial<ProjectKickoff> | undefined, proje
     internalConfirmedAt: raw?.internalConfirmedAt ?? null,
     clientConfirmedAt: raw?.clientConfirmedAt ?? null,
     pmFit: raw?.pmFit ?? "",
+    clientKickoffDueDate: raw?.clientKickoffDueDate ?? "",
+    internalDate: raw?.internalDate ?? "",
   };
   if (base.internalConfirmedAt && !base.commercialDeliveredAt) {
     base.commercialDeliveredAt = base.internalConfirmedAt;
@@ -190,9 +249,7 @@ export function normalizeAreaReview(raw: Partial<KickoffAreaReview>): KickoffAre
 }
 
 export function commercialDeliveryReady(kickoff: ProjectKickoff) {
-  const sold = Boolean(kickoff.commercialCommitment?.trim() || kickoff.proposal?.body?.trim());
-  const dates = Boolean(kickoff.soldStartDate && kickoff.soldFinishDate);
-  return proposalReady(kickoff.proposal) && sold && dates;
+  return proposalReady(kickoff.proposal) || Boolean(kickoff.commercialCommitment?.trim());
 }
 
 export function involvedAreas(areas: OrgArea[]) {
@@ -205,8 +262,7 @@ export function areaReviewFor(kickoff: ProjectKickoff, areaId: string) {
 }
 
 export function areaReviewValid(review: KickoffAreaReview | undefined) {
-  if (!review?.stance || !review.comment?.trim()) return false;
-  return review.comment.trim().length >= MIN_AREA_JUSTIFICATION;
+  return (review?.comment?.trim().length ?? 0) >= MIN_AREA_JUSTIFICATION;
 }
 
 export function pendingAreas(kickoff: ProjectKickoff | undefined, areas: OrgArea[]) {
@@ -226,45 +282,110 @@ export function areaReviewsComplete(kickoff: ProjectKickoff, areas: OrgArea[]) {
   return pendingAreas(kickoff, areas).length === 0 && involvedAreas(areas).length > 0;
 }
 
-export function evaluateInternalGate(kickoff: ProjectKickoff, areas: OrgArea[]): InternalKickoffGate {
-  const pending = pendingAreas(kickoff, areas);
-  const blockers = blockingAreas(kickoff, areas);
-  const conditions = adjustingAreas(kickoff, areas);
-  const reasons: string[] = [];
-  let verdict: KickoffVerdict = "go";
+export function normalizeEvalAnswers(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const next: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    next[key] = String(value ?? "");
+  }
+  return next;
+}
 
-  if (pending.length) {
-    verdict = "incomplete";
-    reasons.push(
-      `Cada área involucrada debe dejar por escrito por qué se justifica (o no) desarrollar la obra (mínimo ${MIN_AREA_JUSTIFICATION} caracteres). El documento de respaldo es opcional. Pendientes: ${pending.map((item) => item.name).join(", ")}.`,
-    );
-  } else if (blockers.length) {
-    verdict = "nogo";
-    reasons.push(
-      `${blockers.map((item) => item.name).join(", ")} marcó la obra como no viable. Hay que resolver esa observación crítica antes del kickoff con el cliente.`,
-    );
-  } else if (conditions.length) {
-    verdict = "conditional";
-    reasons.push(
-      `Hay condiciones de ${conditions.map((item) => item.name).join(", ")}. El gestor debe incorporarlas en el plan de cumplimiento.`,
-    );
-    if (!kickoff.pmFulfillmentPlan?.trim()) {
-      reasons.push("Falta el plan de cumplimiento del gestor para esos ajustes.");
+export function individualEvalComplete(kickoff: ProjectKickoff) {
+  return INDIVIDUAL_KICKOFF_QUESTIONS.every(
+    (item) => (kickoff.internalEvalAnswers?.[item.id] ?? "").trim().length >= MIN_INDIVIDUAL_EVAL,
+  );
+}
+
+export function individualInternalReady(kickoff: ProjectKickoff) {
+  const sold = proposalReady(kickoff.proposal) || Boolean(kickoff.commercialCommitment?.trim());
+  const notes = (kickoff.internalNotes ?? "").trim().length >= MIN_INDIVIDUAL_EVAL;
+  return sold && notes && individualEvalComplete(kickoff);
+}
+
+export function composeIndividualJudgment(kickoff: ProjectKickoff) {
+  const notes = kickoff.internalNotes.trim();
+  const lines = INDIVIDUAL_KICKOFF_QUESTIONS.map((item) => {
+    const answer = (kickoff.internalEvalAnswers?.[item.id] ?? "").trim();
+    return answer ? `· ${item.knowledgeArea}: ${answer}` : "";
+  }).filter(Boolean);
+  return [notes, lines.join("\n")].filter(Boolean).join("\n\n");
+}
+
+export function evaluateInternalGate(
+  kickoff: ProjectKickoff,
+  areas: OrgArea[],
+  independent = false,
+): InternalKickoffGate {
+  if (independent) {
+    const sold = proposalReady(kickoff.proposal) || Boolean(kickoff.commercialCommitment?.trim());
+    const reasons: string[] = [];
+    if (!sold) reasons.push("Registra la descripción de lo vendido (alcance de la propuesta comercial).");
+    if ((kickoff.internalNotes ?? "").trim().length < MIN_INDIVIDUAL_EVAL) {
+      reasons.push("Anota lo que vas a validar con el cliente en el kickoff de partida.");
     }
+    if (!individualEvalComplete(kickoff)) {
+      reasons.push("Completá el criterio PMBOK (todas las preguntas) antes de ir con el cliente.");
+    }
+    const ready = reasons.length === 0;
+    const stamped = Boolean(kickoff.commercialDeliveredAt && kickoff.pmValidatedAt);
+    return {
+      verdict: ready ? "go" : "incomplete",
+      pending: [],
+      blockers: [],
+      conditions: [],
+      reasons,
+      canCloseInternal: ready,
+      canMeetClient: ready && stamped,
+    };
+  }
+  const pending = pendingAreas(kickoff, areas);
+  const reasons: string[] = [];
+  const sold = collaborativeInternalReadyExtract(kickoff);
+  if (!sold) {
+    reasons.push("Registra el extracto de lo vendido para que las áreas puedan comentar la misma propuesta.");
+  }
+  if (!kickoff.internalDate) {
+    reasons.push("Fija la fecha de consulta interna a las áreas.");
+  }
+  if (!kickoff.clientKickoffDueDate) {
+    reasons.push("Fija el plazo del kickoff con el cliente.");
+  }
+  const ready = reasons.length === 0;
+  if (pending.length) {
+    reasons.push(
+      `Comentarios aún no registrados (no bloquean el avance): ${pending.map((item) => item.name).join(", ")}.`,
+    );
   }
 
-  if (!proposalReady(kickoff.proposal)) {
-    verdict = "incomplete";
-    reasons.unshift("Falta el extracto de lo vendido para que las áreas evalúen la misma propuesta.");
-  }
+  return {
+    verdict: ready ? "go" : "incomplete",
+    pending,
+    blockers: [],
+    conditions: [],
+    reasons,
+    canCloseInternal: ready,
+    canMeetClient: ready,
+  };
+}
 
-  const partiesOk = partiesValidated(kickoff);
-  const pmOk = pmReviewReady(kickoff);
-  const canCloseInternal =
-    verdict === "go" || (verdict === "conditional" && Boolean(kickoff.pmFulfillmentPlan?.trim()));
-  const canMeetClient = canCloseInternal && partiesOk && pmOk;
+export function collaborativeInternalReadyExtract(kickoff: ProjectKickoff) {
+  return proposalReady(kickoff.proposal) || Boolean(kickoff.commercialCommitment?.trim());
+}
 
-  return { verdict, pending, blockers, conditions, reasons, canCloseInternal, canMeetClient };
+export function collaborativeInternalReady(kickoff: ProjectKickoff) {
+  return (
+    collaborativeInternalReadyExtract(kickoff) &&
+    Boolean(kickoff.internalDate) &&
+    Boolean(kickoff.clientKickoffDueDate)
+  );
+}
+
+export function addCalendarDays(iso: string, days: number) {
+  if (!iso) return "";
+  const date = new Date(`${iso}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 export function roleIsStaffed(users: TenantUser[], role: UserRole) {
@@ -292,6 +413,18 @@ export function coversKickoffRole(
   if (user.role === preferred) return true;
   if (!actsAsSoleOperator(users, ownerManagesAll)) return false;
   return user.role === "owner";
+}
+
+/** Extracto de lo vendido: administrador y gestor lo registran. Comercial solo si existe el puesto. */
+export function canEditSoldExtract(user: TenantUser, users: TenantUser[], ownerManagesAll: boolean) {
+  if (user.role === "owner" || user.role === "pmo" || user.role === "commercial") return true;
+  return actsAsSoleOperator(users, ownerManagesAll);
+}
+
+/** Comentarios del gestor: se editan, no cierran el flujo. */
+export function canEditPmNotes(user: TenantUser, users: TenantUser[], ownerManagesAll: boolean) {
+  if (user.role === "pmo" || user.role === "owner") return true;
+  return actsAsSoleOperator(users, ownerManagesAll);
 }
 
 export function counterpartForArea(area: OrgArea, users: TenantUser[]) {
@@ -322,7 +455,9 @@ export function areasUserCanReview(
   ownerManagesAll: boolean,
 ) {
   const involved = involvedAreas(areas);
-  if (actsAsSoleOperator(users, ownerManagesAll)) return involved;
+  if (actsAsSoleOperator(users, ownerManagesAll) || user.role === "owner" || user.role === "pmo") {
+    return involved;
+  }
   return involved.filter((area) => area.id === user.areaId || area.role === user.role);
 }
 
@@ -330,9 +465,8 @@ export function composeAreaComments(reviews: KickoffAreaReview[]) {
   if (!reviews.length) return "";
   return reviews
     .map((item) => {
-      const stance = REVIEW_STANCE_OPTIONS.find((entry) => entry.id === item.stance)?.label ?? item.stance;
       const evidence = item.evidenceFileName ? ` [evidencia: ${item.evidenceFileName}]` : "";
-      return `· ${item.areaName} (${stance}): ${item.comment}${evidence}`;
+      return `· ${item.areaName}: ${item.comment}${evidence}`;
     })
     .join("\n");
 }
@@ -353,7 +487,7 @@ export function relatedKnowledge(
 export function draftFinalProposal(kickoff: ProjectKickoff) {
   if (kickoff.finalProposalToClient.trim()) return kickoff.finalProposalToClient;
   const comments = composeAreaComments(kickoff.areaReviews);
-  return [kickoff.commercialCommitment.trim(), comments ? `Criterio de las áreas:\n${comments}` : ""]
+  return [kickoff.commercialCommitment.trim(), comments ? `Comentarios de las áreas:\n${comments}` : ""]
     .filter(Boolean)
     .join("\n\n");
 }
@@ -362,8 +496,8 @@ export function partiesValidated(kickoff: ProjectKickoff) {
   return Boolean(kickoff.commercialDeliveredAt && kickoff.pmValidatedAt);
 }
 
-export function internalReadyForClient(kickoff: ProjectKickoff, areas: OrgArea[]) {
-  return evaluateInternalGate(kickoff, areas).canMeetClient;
+export function internalReadyForClient(kickoff: ProjectKickoff, areas: OrgArea[], independent = false) {
+  return evaluateInternalGate(kickoff, areas, independent).canMeetClient;
 }
 
 export function pmReviewReady(kickoff: ProjectKickoff) {
@@ -377,7 +511,7 @@ export function pmReviewReady(kickoff: ProjectKickoff) {
 export function defaultWorkingAgreement(areas: OrgArea[]) {
   const enabled = areas.filter((item) => item.enabled);
   if (!enabled.length) {
-    return "Comercial entrega la propuesta. Cada área involucrada deja por escrito las razones que justifican el proyecto. Un documento de respaldo es opcional. Con esos comentarios el gestor cierra el kickoff interno y recién ahí se abre el kickoff con el cliente.";
+    return "El administrador o el gestor registran el extracto. Las áreas pueden comentar. El kickoff interno y el del cliente son opcionales: una obra en curso se puede migrar directo al cronograma.";
   }
   return enabled
     .map((area) => `· ${area.name}: ${area.description}`)
@@ -385,7 +519,7 @@ export function defaultWorkingAgreement(areas: OrgArea[]) {
 }
 
 export function scheduleUnlocked(project: Project) {
-  return project.kickoffPhase === "client_done";
+  return project.id !== "prj-pending";
 }
 
 export function clientLabel(client: Client | undefined) {

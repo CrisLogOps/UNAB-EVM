@@ -42,6 +42,12 @@ button {
   max-width: 100%;
 }
 
+input[type="date"],
+input[type="datetime-local"] {
+  min-width: 0;
+  width: 100%;
+}
+
 @media (min-width: 640px) {
   input,
   select,
@@ -62,4 +68,35 @@ button {
 
 .min-w-0 {
   min-width: 0;
+}
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+.workbook-print-only {
+  display: none;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .workbook-print-only {
+    display: block;
+  }
+
+  .workbook-sheet {
+    box-shadow: none !important;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .workbook-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
 }

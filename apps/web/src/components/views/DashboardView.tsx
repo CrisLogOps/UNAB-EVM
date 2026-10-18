@@ -1,16 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable, type Column } from "@/components/data/DataTable";
 import { SCurveChart } from "@/components/charts/SCurveChart";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ELEMENT_KIND_LABELS } from "@/lib/schedule-csv";
-import { formatClp, formatRatio } from "@/lib/evm";
-import { computeLiveEvm, type ActivityEvmRow } from "@/lib/evm-project";
+import { formatClp, formatRatio, registeredBudgetClp } from "@/lib/evm";
+import {
+  computeLiveEvm,
+  scheduleRunStatus,
+  SCHEDULE_RUN_STATUS_LABELS,
+  type ActivityEvmRow,
+  type ScheduleRunStatus,
+} from "@/lib/evm-project";
 import { ROLE_LABELS } from "@/lib/constants";
+import type { ScheduleElementKind } from "@/lib/types";
 import { StartupChecklist } from "@/components/onboarding/StartupChecklist";
 import { KickoffAreaPanel } from "@/components/onboarding/KickoffAreaPanel";
 import { ProcessLifecycle } from "@/components/onboarding/ProcessLifecycle";
@@ -41,8 +48,30 @@ function evidenceLabel(row: ActivityEvmRow) {
   return "Pendiente";
 }
 
+function evidenceKey(row: ActivityEvmRow) {
+  if (!row.requiresEvidence) return "na";
+  if (row.evidence === "none") return "pending";
+  return row.evidence;
+}
+
+const STATUS_PILL: Record<ScheduleRunStatus, string> = {
+  pending: "bg-slate-100 text-slate-700",
+  in_progress: "bg-sky-100 text-sky-900",
+  done: "bg-emerald-100 text-emerald-900",
+  late: "bg-amber-100 text-amber-950",
+};
+
+const EVIDENCE_FILTERS: { value: string; label: string }[] = [
+  { value: "", label: "Toda evidencia" },
+  { value: "pending", label: "Pendiente" },
+  { value: "uploaded", label: "En revisión" },
+  { value: "validated", label: "Validada" },
+  { value: "rejected", label: "Rechazada" },
+  { value: "na", label: "No aplica" },
+];
+
 export function DashboardView() {
-  const { project, role, teamForProject, assignments, sessionUser, gantt, reports, canOperate, kickoffFor } = useOrg();
+  const { project, role, teamForProject, assignments, sessionUser, gantt, reports, canOperate, kickoffFor, isIndividualMode } = useOrg();
   const router = useRouter();
   const team = teamForProject(project.id);
   const activities = useMemo(
@@ -68,6 +97,37 @@ export function DashboardView() {
       ? "Miras cómo va, sin editar la obra"
       : "");
 
+  const [startFrom, setStartFrom] = useState("");
+  const [startTo, setStartTo] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ScheduleRunStatus | "">("");
+  const [stageFilter, setStageFilter] = useState("");
+  const [kindFilter, setKindFilter] = useState<ScheduleElementKind | "">("");
+  const [evidenceFilter, setEvidenceFilter] = useState("");
+
+  const stages = useMemo(() => {
+    const values = new Set(live.activities.map((item) => item.stage).filter(Boolean));
+    return [...values].sort((a, b) => a.localeCompare(b, "es"));
+  }, [live.activities]);
+
+  const kinds = useMemo(() => {
+    const values = new Set(live.activities.map((item) => item.kind));
+    return [...values];
+  }, [live.activities]);
+
+  const filteredActivities = useMemo(() => {
+    return live.activities.filter((row) => {
+      if (startFrom && (!row.start || row.start < startFrom)) return false;
+      if (startTo && (!row.start || row.start > startTo)) return false;
+      if (statusFilter && scheduleRunStatus(row) !== statusFilter) return false;
+      if (stageFilter && row.stage !== stageFilter) return false;
+      if (kindFilter && row.kind !== kindFilter) return false;
+      if (evidenceFilter && evidenceKey(row) !== evidenceFilter) return false;
+      return true;
+    });
+  }, [live.activities, startFrom, startTo, statusFilter, stageFilter, kindFilter, evidenceFilter]);
+
+  const filtersActive = Boolean(startFrom || startTo || statusFilter || stageFilter || kindFilter || evidenceFilter);
+
   const columns: Column<ActivityEvmRow>[] = [
     {
       key: "code",
@@ -80,13 +140,38 @@ export function DashboardView() {
       render: (row) => (
         <span>
           <span className="font-medium">{row.name}</span>
-          <span className="mt-0.5 block text-[11px] text-slate-500">{ELEMENT_KIND_LABELS[row.kind]}</span>
+          <span className="mt-0.5 block text-[11px] text-slate-500">
+            {row.stage} · {ELEMENT_KIND_LABELS[row.kind]}
+          </span>
         </span>
       ),
     },
     {
+      key: "start",
+      header: "Inicio",
+      render: (row) => row.start || "s/f",
+    },
+    {
+      key: "window",
+      header: "Término",
+      render: (row) => row.end || "s/f",
+    },
+    {
+      key: "status",
+      header: "Estado",
+      render: (row) => {
+        const status = scheduleRunStatus(row);
+        return (
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_PILL[status]}`}>
+            {SCHEDULE_RUN_STATUS_LABELS[status]}
+          </span>
+        );
+      },
+    },
+    {
       key: "plan",
       header: "% plan (PV)",
+      hideOnMobile: true,
       render: (row) => percentLabel(row.plannedPercent),
     },
     {
@@ -97,6 +182,7 @@ export function DashboardView() {
     {
       key: "money",
       header: live.moneyMode ? "EV" : "Peso",
+      hideOnMobile: true,
       render: (row) => formatMeasure(row.ev, live.moneyMode),
     },
     {
@@ -110,7 +196,8 @@ export function DashboardView() {
   const spiValue = selected.pv > 0 ? formatRatio(selected.spi) : "—";
   const cpiStatus: AlertStatus = selected.ac > 0 ? selected.alerts.cpi : "yellow";
   const spiStatus: AlertStatus = selected.pv > 0 ? selected.alerts.spit : "yellow";
-  const controlReady = project.id !== "prj-pending" && project.kickoffPhase === "client_done";
+  const controlReady = project.id !== "prj-pending";
+  const budgetClp = registeredBudgetClp(project);
 
   return (
     <div className="space-y-6">
@@ -127,13 +214,11 @@ export function DashboardView() {
         </h1>
         <p className="text-sm break-words text-slate-600">
           {project.id === "prj-pending"
-            ? "Completa los datos del proyecto. El valor ganado aparece cuando hay calendario."
+            ? "Completa los datos del proyecto. El valor ganado aparece cuando hay cronograma."
             : `${project.code}${live.scoped ? " · solo lo asignado a este puesto" : ""}${
-                project.bac
-                  ? ` · BAC ${formatClp(project.bac)}`
-                  : live.moneyMode
-                    ? ""
-                    : " · sin presupuesto: se mide esfuerzo y plazo"
+                budgetClp
+                  ? ` · presupuesto inicial ${formatClp(budgetClp)}`
+                  : " · sin presupuesto: registra el monto para cargar la plantilla EDT"
               }${myNote ? ` · ${myNote}` : ""}`}
         </p>
       </div>
@@ -156,12 +241,20 @@ export function DashboardView() {
                   Cargar avance
                 </Link>
               ) : null}
+              {canUpload ? (
+                <Link
+                  href="/libro-obra"
+                  className="w-full rounded-md border border-slate-200 px-3 py-3 text-center text-sm hover:bg-slate-50 sm:w-auto sm:py-2"
+                >
+                  Libro de obra
+                </Link>
+              ) : null}
               {canOperate("schedule:edit") ? (
                 <Link
                   href="/gantt"
                   className="w-full rounded-md border border-slate-200 px-3 py-3 text-center text-sm hover:bg-slate-50 sm:w-auto sm:py-2"
                 >
-                  Abrir calendario
+                  Abrir cronograma
                 </Link>
               ) : null}
             </div>
@@ -172,7 +265,19 @@ export function DashboardView() {
             cuenta con evidencia validada (foto de terreno o documento de escritorio).
           </p>
 
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <KpiCard
+              label="Presupuesto inicial"
+              value={budgetClp > 0 ? formatClp(budgetClp) : "—"}
+              status={budgetClp > 0 ? "green" : "yellow"}
+              hint={
+                budgetClp > 0
+                  ? project.bac > 0
+                    ? "BAC aprobado · se reparte en el cronograma de ejemplo"
+                    : "Cargado en Presupuesto · la plantilla EDT ya usa este monto"
+                  : "Cárgalo en Presupuesto para armar el cronograma de ejemplo"
+              }
+            />
             <KpiCard
               label="Valor ganado (EV)"
               value={formatMeasure(selected.ev, live.moneyMode)}
@@ -215,36 +320,147 @@ export function DashboardView() {
               </h2>
               <p className="text-xs text-slate-500">
                 {live.activities.length
-                  ? `${live.activities.length} elemento${live.activities.length === 1 ? "" : "s"}`
+                  ? `${filteredActivities.length} de ${live.activities.length} elemento${live.activities.length === 1 ? "" : "s"} del cronograma`
                   : "Sin partidas en este puesto"}
               </p>
             </div>
             {live.activities.length ? (
-              <DataTable
-                columns={columns}
-                data={live.activities}
-                rowKey={(row) => row.id}
-                filterPlaceholder={fieldView ? "Buscar labor…" : "Buscar actividad…"}
-                filterFn={(row, query) => `${row.code} ${row.name} ${row.kind}`.toLowerCase().includes(query)}
-                actions={
-                  canUpload
-                    ? [
-                        {
-                          label: "Registrar",
-                          variant: "edit",
-                          onClick: () => router.push("/progress"),
-                        },
-                      ]
-                    : undefined
-                }
-              />
+              <>
+                <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white p-3 lg:grid-cols-3 xl:grid-cols-6">
+                  <label className="block min-w-0 text-xs">
+                    <span className="mb-1 block font-medium text-slate-600">Inicio desde</span>
+                    <input
+                      type="date"
+                      lang="es-CL"
+                      value={startFrom}
+                      onChange={(event) => setStartFrom(event.target.value)}
+                      className="w-full min-w-0 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="block min-w-0 text-xs">
+                    <span className="mb-1 block font-medium text-slate-600">Inicio hasta</span>
+                    <input
+                      type="date"
+                      lang="es-CL"
+                      value={startTo}
+                      min={startFrom || undefined}
+                      onChange={(event) => setStartTo(event.target.value)}
+                      className="w-full min-w-0 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    />
+                  </label>
+                  <label className="block min-w-0 text-xs">
+                    <span className="mb-1 block font-medium text-slate-600">Estado</span>
+                    <select
+                      value={statusFilter}
+                      onChange={(event) => setStatusFilter(event.target.value as ScheduleRunStatus | "")}
+                      className="w-full min-w-0 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">Todos</option>
+                      {(Object.keys(SCHEDULE_RUN_STATUS_LABELS) as ScheduleRunStatus[]).map((key) => (
+                        <option key={key} value={key}>
+                          {SCHEDULE_RUN_STATUS_LABELS[key]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block min-w-0 text-xs">
+                    <span className="mb-1 block font-medium text-slate-600">Fase</span>
+                    <select
+                      value={stageFilter}
+                      onChange={(event) => setStageFilter(event.target.value)}
+                      className="w-full min-w-0 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">Todas</option>
+                      {stages.map((stage) => (
+                        <option key={stage} value={stage}>
+                          {stage}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block min-w-0 text-xs">
+                    <span className="mb-1 block font-medium text-slate-600">Tipo</span>
+                    <select
+                      value={kindFilter}
+                      onChange={(event) => setKindFilter(event.target.value as ScheduleElementKind | "")}
+                      className="w-full min-w-0 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">Todos</option>
+                      {kinds.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {ELEMENT_KIND_LABELS[kind]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block min-w-0 text-xs">
+                    <span className="mb-1 block font-medium text-slate-600">Evidencia</span>
+                    <select
+                      value={evidenceFilter}
+                      onChange={(event) => setEvidenceFilter(event.target.value)}
+                      className="w-full min-w-0 rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                    >
+                      {EVIDENCE_FILTERS.map((item) => (
+                        <option key={item.value || "all"} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {filtersActive ? (
+                    <div className="col-span-2 flex items-end lg:col-span-3 xl:col-span-6">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStartFrom("");
+                          setStartTo("");
+                          setStatusFilter("");
+                          setStageFilter("");
+                          setKindFilter("");
+                          setEvidenceFilter("");
+                        }}
+                        className="min-h-10 rounded-md border border-slate-200 px-3 py-2 text-xs hover:bg-slate-50"
+                      >
+                        Quitar filtros
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <p className="mb-2 text-[11px] text-slate-500">
+                  Los filtros recortan la tabla según el cronograma. El gráfico y los KPI siguen el proyecto completo.
+                </p>
+                <DataTable
+                  columns={columns}
+                  data={filteredActivities}
+                  rowKey={(row) => row.id}
+                  filterPlaceholder={fieldView ? "Buscar labor…" : "Buscar actividad…"}
+                  filterFn={(row, query) =>
+                    `${row.code} ${row.name} ${row.stage} ${row.kind} ${row.start} ${row.end} ${SCHEDULE_RUN_STATUS_LABELS[scheduleRunStatus(row)]} ${evidenceLabel(row)}`
+                      .toLowerCase()
+                      .includes(query)
+                  }
+                  actions={
+                    canUpload
+                      ? [
+                          {
+                            label: "Registrar",
+                            variant: "edit",
+                            onClick: () => router.push("/progress"),
+                          },
+                        ]
+                      : undefined
+                  }
+                />
+              </>
             ) : (
               <p className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-500">
                 {fieldView
                   ? "No hay labores de terreno asignadas a este puesto. El gestor de proyectos las carga en el cronograma (Inspección en terreno, responsable Operaciones o Subcontrato)."
                   : officeView
                     ? "No hay partidas de escritorio asignadas a este puesto. El gestor las carga en el cronograma con tu área como responsable."
-                    : "Carga la plantilla EDT en Calendario para armar el valor ganado."}
+                    : budgetClp > 0
+                      ? "Carga o confirma la plantilla EDT en Cronograma para armar el valor ganado."
+                      : "Registra el presupuesto inicial. Con ese monto se carga la plantilla EDT y este dashboard."}
               </p>
             )}
           </section>
@@ -252,11 +468,24 @@ export function DashboardView() {
       ) : null}
 
       {project.id !== "prj-pending" && project.kickoffPhase !== "client_done" ? (
-        <KickoffAreaPanel
-          projectId={project.id}
-          kickoff={kickoffFor(project.id) ?? emptyKickoff(project.id, project.clientId)}
-          showExtract
-        />
+        isIndividualMode ? (
+          <section className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 text-sm text-slate-700">
+            <p className="font-semibold">Kickoff interno</p>
+            <p className="mt-1">
+              En la vista individual registrás lo vendido, notas para el cliente y el criterio PMBOK. No hay revisión
+              entre áreas. El expediente se valida en el kickoff con el mandante.
+            </p>
+            <Link href="/clients" className="mt-3 inline-block text-sm font-medium text-[var(--brand)] underline">
+              Continuar en Clientes
+            </Link>
+          </section>
+        ) : (
+          <KickoffAreaPanel
+            projectId={project.id}
+            kickoff={kickoffFor(project.id) ?? emptyKickoff(project.id, project.clientId)}
+            showExtract
+          />
+        )
       ) : null}
 
       <StartupChecklist compact />

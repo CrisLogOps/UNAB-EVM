@@ -10,10 +10,12 @@ export function EvidenceCapture({
   file,
   onFile,
   fieldMode = false,
+  required = true,
 }: {
   file: File | null;
   onFile: (file: File | null) => void;
   fieldMode?: boolean;
+  required?: boolean;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -31,7 +33,9 @@ export function EvidenceCapture({
 
   return (
     <div className="space-y-3 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-4">
-      <p className="text-sm font-medium text-slate-800">Evidencia del avance (obligatoria)</p>
+      <p className="text-sm font-medium text-slate-800">
+        {required ? "Evidencia del avance (obligatoria)" : "Respaldo (opcional)"}
+      </p>
       <p className="text-xs text-slate-500">
         {fieldMode
           ? "En terreno puedes usar la cámara del celular. Desde escritorio sube foto, PDF o planilla."
@@ -87,7 +91,11 @@ export function EvidenceCapture({
         </div>
       ) : null}
 
-      <p className="text-center text-xs text-amber-800">Sin evidencia validada, el avance no cuenta en el control.</p>
+      {required ? (
+        <p className="text-center text-xs text-amber-800">Sin evidencia validada, el avance no cuenta en el control.</p>
+      ) : (
+        <p className="text-center text-xs text-slate-500">El archivo queda en el expediente. No bloquea el valor ganado.</p>
+      )}
     </div>
   );
 }

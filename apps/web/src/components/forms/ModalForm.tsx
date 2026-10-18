@@ -7,11 +7,13 @@ import { EvidenceCapture } from "@/components/forms/EvidenceCapture";
 export interface FormField {
   name: string;
   label: string;
-  type: "text" | "number" | "select" | "date" | "textarea";
+  type: "text" | "number" | "select" | "date" | "textarea" | "password";
   required?: boolean;
   options?: { value: string; label: string }[];
   placeholder?: string;
   defaultValue?: string;
+  minLength?: number;
+  autoComplete?: string;
 }
 
 interface ModalFormProps {
@@ -20,6 +22,7 @@ interface ModalFormProps {
   onClose: () => void;
   fields: FormField[];
   requireEvidence?: boolean;
+  optionalEvidence?: boolean;
   fieldEvidence?: boolean;
   submitLabel?: string;
   onSubmit: (values: Record<string, string>, file: File | null) => void;
@@ -31,6 +34,7 @@ export function ModalForm({
   onClose,
   fields,
   requireEvidence = false,
+  optionalEvidence = false,
   fieldEvidence = false,
   submitLabel = "Guardar",
   onSubmit,
@@ -97,6 +101,8 @@ export function ModalForm({
                   type={field.type}
                   required={field.required}
                   step={field.type === "number" ? "any" : undefined}
+                  minLength={field.minLength}
+                  autoComplete={field.autoComplete}
                   placeholder={field.placeholder}
                   defaultValue={field.defaultValue}
                   className="w-full rounded-md border border-slate-200 px-3 py-2"
@@ -105,7 +111,14 @@ export function ModalForm({
             </label>
           ))}
 
-          {requireEvidence ? <EvidenceCapture file={file} onFile={setFile} fieldMode={fieldEvidence} /> : null}
+          {requireEvidence || optionalEvidence ? (
+            <EvidenceCapture
+              file={file}
+              onFile={setFile}
+              fieldMode={fieldEvidence}
+              required={requireEvidence}
+            />
+          ) : null}
 
           {error ? <p className="text-sm text-red-700">{error}</p> : null}
 

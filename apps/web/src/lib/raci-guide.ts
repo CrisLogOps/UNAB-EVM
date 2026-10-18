@@ -10,12 +10,12 @@ export const ROLE_GUIDE: Record<UserRole, { title: string; summary: string; duti
   pmo: {
     title: "Gestor de proyectos",
     summary: "Recibe lo vendido por Comercial, confirma con juicio experto si se puede cumplir y ordena la ejecución.",
-    duties: ["Validar el kickoff interno", "Armar el calendario", "Revisar el presupuesto"],
+    duties: ["Validar el kickoff interno", "Armar el cronograma", "Llevar el libro de obra"],
   },
   admin_obra: {
     title: "Jefe de faena",
     summary: "Mira el estado en terreno y respalda las partidas que el cronograma le asigna.",
-    duties: ["Ver el estado de la obra", "Cargar evidencia de tus partidas", "Pedir cambios si algo no cuadra"],
+    duties: ["Ver el estado de la obra", "Cargar evidencia de tus partidas", "Anotar el libro de obra"],
   },
   finance: {
     title: "Finanzas",
@@ -35,7 +35,7 @@ export const ROLE_GUIDE: Record<UserRole, { title: string; summary: string; duti
   field: {
     title: "Terreno",
     summary: "Registra el avance del día con foto o archivo. Sin evidencia validada, el avance no cuenta.",
-    duties: ["Ver el estado de tus labores", "Cargar avance", "Adjuntar foto o documento", "Pedir material"],
+    duties: ["Ver el estado de tus labores", "Cargar avance", "Anotar el libro de obra", "Adjuntar foto o documento"],
   },
   subcontractor: {
     title: "Subcontrato",
@@ -68,6 +68,6 @@ export const ADMIN_FLOW = [
   { step: "1", title: "Clientes", text: "Registra razón social, RUT y el proyecto de cada cliente.", href: "/clients" },
   { step: "2", title: "Kickoff", text: "Interno (Comercial entrega, el gestor confirma) y con el cliente (inicia el cronograma).", href: "/clients" },
   { step: "3", title: "Presupuesto", text: "Cargar, revisar y aprobar el BAC para controlar costo.", href: "/budget" },
-  { step: "4", title: "Calendario", text: "Actividades con inicio, término y confirmación del plan.", href: "/gantt" },
+  { step: "4", title: "Cronograma", text: "Actividades con inicio, término y confirmación del plan.", href: "/gantt" },
   { step: "5", title: "Control", text: "Curva S, valor ganado, CPI y SPI; cada puesto ve sus actividades.", href: "/demo" },
 ] as const;

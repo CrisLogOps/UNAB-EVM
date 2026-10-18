@@ -6,7 +6,8 @@ import { SETUP_STORAGE_KEY, ROLE_LABELS } from "@/lib/constants";
 import { PRESET_ROLES, defaultProfileDraft, type CompanySize } from "@/lib/company-presets";
 import { companySizeForMode, extraCollaborators, filterNavForMode, isIndividualMode, INDIVIDUAL_HIDDEN_COMPONENT_IDS, type OperatingMode } from "@/lib/operating-mode";
 import { DIRECTION_AREA_ID, type AreaDraft } from "@/lib/tenant-setup";
-import { emptyKickoff, emptyProposal, normalizeKickoff, commercialDeliveryReady, pmReviewReady, partiesValidated, areaReviewsComplete, areasUserCanReview, coversKickoffRole, proposalReady, draftFinalProposal, areaReviewValid, evaluateInternalGate } from "@/lib/kickoff";
+import { normalizeTenantIntegrations } from "@/lib/tenant-integrations";
+import { emptyKickoff, emptyProposal, normalizeKickoff, commercialDeliveryReady, partiesValidated, areasUserCanReview, coversKickoffRole, canEditSoldExtract, canEditPmNotes, proposalReady, draftFinalProposal, areaReviewValid, individualInternalReady, composeIndividualJudgment, collaborativeInternalReady } from "@/lib/kickoff";
 import {
   extraComponentIdsForRole,
   extraPermissionsForRole,
@@ -14,8 +15,36 @@ import {
 } from "@/lib/coverage";
 import { canOperateAs, coveringRoles, handedRoles } from "@/lib/handover";
 import { canExecute } from "@/lib/raci";
-import { normalizeGanttActivity } from "@/lib/schedule-csv";
+import { defaultScheduleActivities, normalizeGanttActivity, scaleActivitiesToBudget } from "@/lib/schedule-csv";
+import { registeredBudgetClp } from "@/lib/evm";
+import {
+  ACCOUNT_STORAGE_KEY,
+  IDENTITY_STORAGE_KEY,
+  PASSWORD_MIN_LENGTH,
+  findAccount,
+  findActiveUserByEmail,
+  joinPersonName,
+  normalizeEmail,
+  parseAccounts,
+  parseIdentity,
+  resolveJoin,
+  type Identity,
+  type NewOrgResult,
+  type PlatformAccount,
+  type CompanyRegisterResult,
+  type SignInResult,
+  type SsoProvider,
+} from "@/lib/identity";
 import { fetchMvpSnapshot, mvpApiEnabled, saveMvpSnapshot } from "@/lib/mvp-api";
+import {
+  backfillProgressIntoWorkBook,
+  emptyWorkBookEntry,
+  entryFromProgressReport,
+  nextFolio,
+  normalizeWorkBookEntry,
+  normalizeWorkBookMeta,
+  workBookEntryReady,
+} from "@/lib/work-book";
 import type {
   AtomicPermission,
   Client,
@@ -35,6 +64,11 @@ import type {
   Tenant,
   TenantUser,
   UserRole,
+  WorkBookEntry,
+  WorkBookKind,
+  WorkBookMeta,
+  WorkBookSafetyLevel,
+  WorkBookThirdPartyKind,
 } from "@/lib/types";
 
 import {
@@ -47,8 +81,16 @@ import {
 export type { CompanySize };
 
 export interface RegisterPayload {
+  firstName: string;
+  lastName: string;
   name: string;
   email: string;
+  password: string;
+  passwordConfirm: string;
+  provider: SsoProvider;
+}
+
+export interface CompanyPayload {
   company: string;
   rut: string;
 }
@@ -66,6 +108,7 @@ export interface OperatingModePayload {
 
 interface OrgContextValue {
   hydrated: boolean;
+  identity: Identity | null;
   setupPhase: SetupPhase;
   ownerManagesAll: boolean;
   isIndividualMode: boolean;
@@ -82,6 +125,8 @@ interface OrgContextValue {
   visibleProjects: Project[];
   gantt: GanttActivity[];
   reports: ProgressReport[];
+  workBook: WorkBookEntry[];
+  workBookMetas: WorkBookMeta[];
   projectId: string;
   project: Project;
   sessionUserId: string;
@@ -91,6 +136,7 @@ interface OrgContextValue {
   nav: NavItem[];
   setSessionUserId: (id: string) => void;
   setProjectId: (id: string) => void;
+  updateTenant: (patch: Partial<Pick<Tenant, "name" | "rut" | "integrations">>) => void;
   applySizePreset: (size: CompanySize) => void;
   addArea: (name: string, role: UserRole, description: string) => void;
   toggleArea: (id: string, enabled: boolean) => void;
@@ -98,8 +144,15 @@ interface OrgContextValue {
   updateProfileComponents: (id: string, componentIds: PlatformComponentId[]) => void;
   updateProfileTasks: (id: string, extraTaskIds: string[]) => void;
   deleteProfile: (id: string) => boolean;
-  addUser: (input: Omit<TenantUser, "id" | "active" | "role" | "areaId" | "introSeen"> & { profileId: string }) => void;
+  addUser: (
+    input: Omit<TenantUser, "id" | "active" | "role" | "areaId" | "introSeen"> & {
+      profileId: string;
+      password: string;
+    },
+  ) => { ok: true } | { ok: false; message: string };
   removeUser: (userId: string) => boolean;
+  hasPasswordLogin: (email: string) => boolean;
+  setPersonPassword: (userId: string, password: string) => { ok: boolean; message: string };
   assignProfile: (userId: string, profileId: string) => boolean;
   unassignProfile: (userId: string) => boolean;
   addProject: (
@@ -115,20 +168,25 @@ interface OrgContextValue {
       | "proposedBac"
       | "counterBac"
       | "budgetNote"
+      | "scheduleExample"
     >,
   ) => string;
   addClient: (input: { name: string; rut: string; contactName?: string; contactEmail?: string }) => string;
   addClientProject: (
     clientId: string,
-    input: { name: string; code: string; startDate: string; finishDate: string },
+    input: { name: string; code: string; startDate: string; finishDate: string; proposedBac: number },
   ) => string;
+  updateClientProject: (
+    projectId: string,
+    input: { name: string; code: string; startDate: string; finishDate: string; proposedBac: number },
+  ) => boolean;
   saveKickoff: (projectId: string, patch: Partial<ProjectKickoff>) => void;
   stampCommercialKickoff: (projectId: string, patch: Partial<ProjectKickoff>, userId: string) => boolean;
   recordAreaKickoffReview: (
     projectId: string,
     input: {
       areaId: string;
-      stance: KickoffReviewStance;
+      stance?: KickoffReviewStance;
       comment: string;
       evidenceFileName?: string;
       evidenceFileType?: string;
@@ -138,7 +196,9 @@ interface OrgContextValue {
     },
   ) => boolean;
   confirmInternalKickoff: (projectId: string, patch?: Partial<ProjectKickoff>, userId?: string) => boolean;
+  openClientKickoff: (projectId: string, patch?: Partial<ProjectKickoff>, userId?: string) => boolean;
   confirmClientKickoff: (projectId: string, patch?: Partial<ProjectKickoff>) => boolean;
+  activateProject: (projectId: string) => boolean;
   clientFor: (clientId: string) => Client | undefined;
   kickoffFor: (projectId: string) => ProjectKickoff | undefined;
   assignUserToProject: (projectId: string, userId: string, note: string) => void;
@@ -158,8 +218,30 @@ interface OrgContextValue {
     evidenceName: string;
     note?: string;
   }) => boolean;
+  addWorkBookEntry: (input: {
+    kind: WorkBookKind;
+    body: string;
+    occurredOn?: string;
+    evidenceFileName?: string;
+    evidenceFileType?: string;
+    evidenceFileSize?: number;
+    issuer?: string;
+    reference?: string;
+    dueOn?: string;
+    safetyLevel?: WorkBookSafetyLevel;
+    location?: string;
+    thirdPartyKind?: WorkBookThirdPartyKind;
+    thirdPartyName?: string;
+    activityId?: string;
+    weather?: string;
+    occurredTime?: string;
+  }) => boolean;
+  saveWorkBookMeta: (projectId: string, patch: Partial<WorkBookMeta>) => void;
+  workBookMetaFor: (projectId: string) => WorkBookMeta;
   reviewEvidence: (reportId: string, status: Extract<EvidenceStatus, "validated" | "rejected">) => void;
-  completeRegister: (payload: RegisterPayload) => void;
+  identifyRepresentative: (payload: RegisterPayload) => CompanyRegisterResult;
+  completeRegister: (payload: CompanyPayload) => CompanyRegisterResult;
+  beginRegistration: (options?: { replaceExisting?: boolean }) => NewOrgResult;
   completeOperatingMode: (payload: OperatingModePayload) => void;
   completeStructure: (payload: StructurePayload) => void;
   confirmRaci: (manageAll?: boolean) => void;
@@ -168,6 +250,18 @@ interface OrgContextValue {
   sendInvite: (name: string, email: string, profileId: string) => boolean;
   finishSetup: () => void;
   resetOnboarding: () => void;
+  signInWithSso: (provider: Exclude<SsoProvider, "email">, name: string, email: string) => SignInResult;
+  signInWithEmail: (name: string, email: string) => SignInResult;
+  loginWithPassword: (email: string, password: string) => SignInResult;
+  registerWithPassword: (name: string, email: string, password: string) => SignInResult;
+  loginWithSso: (provider: Exclude<SsoProvider, "email">, name: string, email: string) => SignInResult;
+  registerWithSso: (provider: Exclude<SsoProvider, "email">, name: string, email: string) => SignInResult;
+  requestPasswordReset: (email: string) => { ok: boolean; message: string };
+  completePasswordReset: (email: string, password: string) => { ok: boolean; message: string };
+  continueAsFounder: () => SignInResult;
+  startNewOrganization: (options?: { replaceExisting?: boolean }) => NewOrgResult;
+  joinExistingEnvironment: () => ReturnType<typeof resolveJoin>;
+  signOut: () => void;
   markIntroSeen: (userId: string) => void;
   setOwnerManagesAll: (value: boolean) => void;
   canOperate: (permission: AtomicPermission) => boolean;
@@ -194,6 +288,7 @@ const PLACEHOLDER_PROJECT: Project = {
   proposedBac: null,
   counterBac: null,
   budgetNote: "",
+  scheduleExample: false,
 };
 
 const ALL_COMPONENT_IDS = PLATFORM_COMPONENTS.map((item) => item.id);
@@ -393,6 +488,7 @@ function normalizeTenant(raw: Partial<Tenant> | undefined): Tenant {
           : raw.companySize
             ? "collaborative"
             : "",
+    integrations: normalizeTenantIntegrations(raw.integrations),
   };
 }
 
@@ -422,7 +518,52 @@ function normalizeProject(raw: Partial<Project>, fallback?: Project): Project {
     proposedBac: raw.proposedBac ?? fallback?.proposedBac ?? null,
     counterBac: raw.counterBac ?? fallback?.counterBac ?? null,
     budgetNote: raw.budgetNote ?? fallback?.budgetNote ?? "",
+    scheduleExample: raw.scheduleExample ?? fallback?.scheduleExample ?? false,
   };
+}
+
+function seedMissingExampleSchedules(projects: Project[], gantt: GanttActivity[]) {
+  let nextGantt = gantt;
+  const nextProjects = projects.map((project) => {
+    if (project.id === "prj-pending" || !project.startDate || !project.finishDate) return project;
+    const budget = registeredBudgetClp(project);
+    const existing = nextGantt.filter((item) => item.projectId === project.id);
+    if (!(budget > 0)) {
+      if (project.scheduleExample && existing.length) {
+        nextGantt = nextGantt.filter((item) => item.projectId !== project.id);
+      }
+      return existing.length && !project.scheduleExample ? project : { ...project, scheduleExample: false };
+    }
+    if (existing.length) {
+      if (project.scheduleExample) {
+        nextGantt = [
+          ...nextGantt.filter((item) => item.projectId !== project.id),
+          ...scaleActivitiesToBudget(existing, budget),
+        ];
+      }
+      return project;
+    }
+    nextGantt = [
+      ...nextGantt,
+      ...defaultScheduleActivities(project.id, project.startDate, project.finishDate, budget),
+    ];
+    return { ...project, scheduleExample: true };
+  });
+  return { projects: nextProjects, gantt: nextGantt };
+}
+
+function alignExampleSchedule(
+  current: GanttActivity[],
+  project: Project | undefined,
+  amount: number,
+): GanttActivity[] {
+  if (!project || !(amount > 0) || !project.startDate || !project.finishDate) return current;
+  const existing = current.filter((item) => item.projectId === project.id);
+  if (existing.length && !project.scheduleExample) return current;
+  const next = existing.length
+    ? scaleActivitiesToBudget(existing, amount)
+    : defaultScheduleActivities(project.id, project.startDate, project.finishDate, amount);
+  return [...current.filter((item) => item.projectId !== project.id), ...next];
 }
 
 export function OrgProvider({ children }: { children: ReactNode }) {
@@ -440,7 +581,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [gantt, setGantt] = useState<GanttActivity[]>([]);
   const [reports, setReports] = useState<ProgressReport[]>([]);
+  const [workBook, setWorkBook] = useState<WorkBookEntry[]>([]);
+  const [workBookMetas, setWorkBookMetas] = useState<WorkBookMeta[]>([]);
   const [sessionUserId, setSessionUserIdState] = useState(founderDraft.id);
+  const [identity, setIdentity] = useState<Identity | null>(null);
+  const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
   const [projectId, setProjectIdState] = useState("");
   const skipPersist = useRef(true);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -498,14 +643,51 @@ export function OrgProvider({ children }: { children: ReactNode }) {
               })),
             );
           }
-          if (snap.projects) setProjects(snap.projects.map((item: Project) => normalizeProject(item)));
+          const loadedProjects = snap.projects
+            ? snap.projects.map((item: Project) => normalizeProject(item))
+            : [];
+          const loadedGantt: GanttActivity[] = snap.gantt
+            ? snap.gantt.map((item: GanttActivity) => normalizeGanttActivity(item))
+            : [];
+          const seeded = seedMissingExampleSchedules(loadedProjects, loadedGantt);
+          if (snap.projects) setProjects(seeded.projects);
           if (snap.assignments) setAssignments(snap.assignments);
-          if (snap.gantt) setGantt(snap.gantt.map((item: GanttActivity) => normalizeGanttActivity(item)));
+          if (snap.gantt || seeded.gantt.length) setGantt(seeded.gantt);
           if (snap.reports) setReports(snap.reports);
+          const loadedBook = Array.isArray(snap.workBook)
+            ? snap.workBook.map((item: WorkBookEntry) => normalizeWorkBookEntry(item))
+            : [];
+          const loadedReports: ProgressReport[] = snap.reports ?? [];
+          setWorkBook([...loadedBook, ...backfillProgressIntoWorkBook(loadedReports, loadedBook, seeded.gantt)]);
+          if (Array.isArray(snap.workBookMetas)) {
+            setWorkBookMetas(
+              snap.workBookMetas.map((item: WorkBookMeta) =>
+                normalizeWorkBookMeta(item, item.projectId, item.contractNumber),
+              ),
+            );
+          }
           if (snap.profiles?.length) setProfiles(applyOwnerCoverage(snap.profiles));
           if (snap.areas?.length) setAreas(snap.areas.map((item: OrgArea) => normalizeArea(item)));
           if (snap.sessionUserId) setSessionUserIdState(snap.sessionUserId);
           if (snap.projectId) setProjectIdState(snap.projectId);
+        }
+        try {
+          const rawIdentity = localStorage.getItem(IDENTITY_STORAGE_KEY);
+          const parsed = parseIdentity(rawIdentity ? JSON.parse(rawIdentity) : null);
+          if (parsed) {
+            setIdentity(parsed);
+            const roster: TenantUser[] = snap?.users?.length ? snap.users : [founderDraft];
+            const match = findActiveUserByEmail(roster, parsed.email);
+            if (match) setSessionUserIdState(match.id);
+          }
+        } catch {
+          /* identidad local opcional */
+        }
+        try {
+          const rawAccounts = localStorage.getItem(ACCOUNT_STORAGE_KEY);
+          setAccounts(parseAccounts(rawAccounts ? JSON.parse(rawAccounts) : []));
+        } catch {
+          setAccounts([]);
         }
       } catch {
         /* ambiente local: si el snapshot está corrupto se reinicia el alta */
@@ -554,6 +736,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       assignments,
       gantt,
       reports,
+      workBook,
+      workBookMetas,
       profiles,
       areas,
       sessionUserId,
@@ -582,11 +766,24 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     assignments,
     gantt,
     reports,
+    workBook,
+    workBookMetas,
     profiles,
     areas,
     sessionUserId,
     project.id,
   ]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (identity) localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(identity));
+    else localStorage.removeItem(IDENTITY_STORAGE_KEY);
+  }, [hydrated, identity]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(accounts));
+  }, [hydrated, accounts]);
 
   const navIds = (() => {
     const hidden = new Set(INDIVIDUAL_HIDDEN_COMPONENT_IDS);
@@ -594,15 +791,128 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       role === "owner"
         ? [...ALL_COMPONENT_IDS]
         : [...new Set([...(sessionProfile?.componentIds ?? defaultComponentIds(role)), ...extraNavIds])];
-    if (role !== "owner" && canExecute(role, "evidence:upload")) ids.push("progress");
+    if (role !== "owner" && canExecute(role, "evidence:upload")) {
+      ids.push("progress");
+      ids.push("workbook");
+    }
     const ordered = ["dashboard" as const, ...ids.filter((id) => id !== "dashboard")];
     if (!individual) return ordered;
     return ordered.filter((id) => !hidden.has(id));
   })();
 
   const value = useMemo<OrgContextValue>(
-    () => ({
+    () => {
+      function openSession(name: string, email: string, provider: SsoProvider): SignInResult {
+        const cleanName = name.trim();
+        const cleanEmail = normalizeEmail(email);
+        const user = findActiveUserByEmail(users, cleanEmail);
+        if (user && setupPhase === "done") {
+          setIdentity({
+            name: user.name || cleanName,
+            email: cleanEmail,
+            provider,
+            path: user.role === "owner" ? "new-org" : "join",
+            signedInAt: new Date().toISOString(),
+          });
+          setSessionUserIdState(user.id);
+          return { ok: true, next: "app", intro: !user.introSeen };
+        }
+        if (user && user.role !== "owner") {
+          setIdentity({
+            name: user.name || cleanName,
+            email: cleanEmail,
+            provider,
+            path: "join",
+            signedInAt: new Date().toISOString(),
+          });
+          return { ok: false, message: "El representante todavía está en el Setup 0. Cuando cierre el alta podrás entrar." };
+        }
+        const session: Identity = {
+          name: cleanName,
+          email: cleanEmail,
+          provider,
+          path: "new-org",
+          signedInAt: new Date().toISOString(),
+        };
+        const started = beginNewOrganization(session, false);
+        if (!started.ok) {
+          if (started.needsConfirm) {
+            setIdentity({ ...session, path: "undecided" });
+            return {
+              ok: false,
+              code: "replace-needed",
+              message: `Este navegador ya tiene ${started.tenantName}. Si esta es tu organización nueva, confirmá reemplazar el alta local. Si ya tenés cuenta en ese ambiente, volvé a Iniciar sesión.`,
+            };
+          }
+          return { ok: false, message: started.message ?? "No se pudo iniciar el alta." };
+        }
+        return { ok: true, next: started.next === "app" ? "app" : "setup" };
+      }
+      function beginNewOrganization(session: Identity, replaceExisting?: boolean): NewOrgResult {
+        const founder = users.find((item) => item.id === founderDraft.id);
+        const sameFounder = Boolean(founder?.email) && normalizeEmail(founder?.email ?? "") === session.email;
+        const hasEnvironment = Boolean(tenant.name);
+        if (hasEnvironment && !sameFounder && !replaceExisting) {
+          return { ok: false, needsConfirm: true, tenantName: tenant.name || "el ambiente actual" };
+        }
+        if (sameFounder && setupPhase === "done") {
+          setIdentity({ ...session, path: "new-org" });
+          setSessionUserIdState(founderDraft.id);
+          return { ok: true, next: "app" };
+        }
+        if (sameFounder) {
+          setUsers((current) =>
+            current.map((item) =>
+              item.id === founderDraft.id
+                ? { ...item, name: session.name, email: session.email, introSeen: true }
+                : item,
+            ),
+          );
+          setSessionUserIdState(founderDraft.id);
+          setIdentity({ ...session, path: "new-org" });
+          return { ok: true, next: "setup" };
+        }
+        skipPersist.current = true;
+        setSetupPhase("register");
+        setTenant(emptyTenant());
+        setClients([]);
+        setKickoffs([]);
+        setKnowledge([]);
+        setInvites([]);
+        setProfiles(applyOwnerCoverage(initialProfiles));
+        setAreas(initialAreas);
+        setUsers([
+          {
+            ...founderDraft,
+            name: session.name,
+            email: session.email,
+            introSeen: true,
+          },
+        ]);
+        setAssignments([]);
+        setProjects([]);
+        setGantt([]);
+        setReports([]);
+        setWorkBook([]);
+        setWorkBookMetas([]);
+        setSessionUserIdState(founderDraft.id);
+        setProjectIdState("");
+        localStorage.removeItem(SETUP_STORAGE_KEY);
+        setIdentity({ ...session, path: "new-org" });
+        skipPersist.current = false;
+        return { ok: true, next: "setup" };
+      }
+      function commitSignIn(provider: SsoProvider, name: string, email: string): SignInResult {
+        const cleanName = name.trim();
+        const cleanEmail = normalizeEmail(email);
+        if (!cleanName || !cleanEmail.includes("@")) {
+          return { ok: false, message: "Indica nombre y un correo válido." };
+        }
+        return openSession(cleanName, cleanEmail, provider);
+      }
+      return {
       hydrated,
+      identity,
       setupPhase,
       ownerManagesAll,
       isIndividualMode: individual,
@@ -619,6 +929,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       visibleProjects,
       gantt,
       reports,
+      workBook,
+      workBookMetas,
       projectId: project.id,
       project,
       sessionUserId: sessionUser.id,
@@ -647,6 +959,17 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         }
       },
       setProjectId: setProjectIdState,
+      updateTenant(patch) {
+        setTenant((current) =>
+          normalizeTenant({
+            ...current,
+            ...patch,
+            integrations: patch.integrations
+              ? { ...normalizeTenantIntegrations(patch.integrations), updatedAt: new Date().toISOString() }
+              : current.integrations,
+          }),
+        );
+      },
       applySizePreset(size) {
         const enabled = new Set(PRESET_ROLES[size]);
         setAreas((current) => {
@@ -749,25 +1072,117 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       },
       addUser(input) {
         const profile = profiles.find((item) => item.id === input.profileId);
-        if (!profile || profile.role === "owner") return;
+        if (!profile || profile.role === "owner") {
+          return { ok: false, message: "Elegí un puesto distinto al de administrador." };
+        }
+        const cleanName = input.name.trim();
+        const cleanEmail = normalizeEmail(input.email);
+        const password = input.password;
+        if (!cleanName || !cleanEmail.includes("@")) {
+          return { ok: false, message: "Indica nombre y un correo válido. Ese correo es el usuario de entrada." };
+        }
+        if (password.length < PASSWORD_MIN_LENGTH) {
+          return {
+            ok: false,
+            message: `La clave debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres, igual que la del administrador.`,
+          };
+        }
+        if (users.some((item) => normalizeEmail(item.email) === cleanEmail)) {
+          return {
+            ok: false,
+            message: "Esa persona ya está en el equipo. Definí o cambiá su clave desde la fila.",
+          };
+        }
+        if (findAccount(accounts, cleanEmail)) {
+          return {
+            ok: false,
+            message: "Ese correo ya tiene una cuenta de entrada. Usalo para iniciar sesión o cambiá la clave desde Personas.",
+          };
+        }
+        const userId = `u-${Date.now()}`;
         setUsers((current) => [
           ...current,
           {
-            ...input,
-            id: `u-${Date.now()}`,
+            name: cleanName,
+            email: cleanEmail,
+            profileId: profile.id,
+            id: userId,
             role: profile.role,
             areaId: profile.areaId,
             active: true,
             introSeen: false,
           },
         ]);
+        setAccounts((current) => [
+          ...current,
+          {
+            email: cleanEmail,
+            name: cleanName,
+            password,
+            provider: "email",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        const projectId = project.id !== PLACEHOLDER_PROJECT.id ? project.id : projects[0]?.id;
+        if (projectId) {
+          setAssignments((current) => [
+            ...current,
+            {
+              id: `as-${Date.now()}`,
+              projectId,
+              userId,
+              note: `${cleanName} · ${profile.name}`,
+            },
+          ]);
+        }
+        return { ok: true };
+      },
+      hasPasswordLogin(email) {
+        const account = findAccount(accounts, email);
+        return Boolean(account?.password);
+      },
+      setPersonPassword(userId, password) {
+        const user = users.find((item) => item.id === userId);
+        if (!user || user.role === "owner") {
+          return { ok: false, message: "La clave del administrador se gestiona en el alta o en Olvidé la clave." };
+        }
+        if (password.length < PASSWORD_MIN_LENGTH) {
+          return { ok: false, message: `La clave debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.` };
+        }
+        const cleanEmail = normalizeEmail(user.email);
+        if (!cleanEmail.includes("@")) {
+          return { ok: false, message: "Esa persona no tiene un correo válido para entrar." };
+        }
+        setAccounts((current) => {
+          const existing = findAccount(current, cleanEmail);
+          if (existing) {
+            return current.map((item) =>
+              item.email === cleanEmail
+                ? { ...item, name: user.name, password, provider: "email", resetRequestedAt: undefined }
+                : item,
+            );
+          }
+          return [
+            ...current,
+            {
+              email: cleanEmail,
+              name: user.name,
+              password,
+              provider: "email",
+              createdAt: new Date().toISOString(),
+            },
+          ];
+        });
+        return { ok: true, message: `${user.name} ya puede entrar y salir con ${cleanEmail} y esa clave.` };
       },
       removeUser(userId) {
         const user = users.find((item) => item.id === userId);
         if (!user || user.role === "owner") return false;
+        const cleanEmail = normalizeEmail(user.email);
         setUsers((current) => current.filter((item) => item.id !== userId));
         setAssignments((current) => current.filter((item) => item.userId !== userId));
         setInvites((current) => current.filter((item) => item.email !== user.email));
+        setAccounts((current) => current.filter((item) => item.email !== cleanEmail));
         if (sessionUserId === userId) setSessionUserIdState(founderDraft.id);
         return true;
       },
@@ -789,6 +1204,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             kickoffPhase: clientId ? "none" : "client_done",
             baselineStatus: "DRAFT",
             baselineVersion: null,
+            scheduleExample: false,
           },
         ]);
         if (clientId) {
@@ -829,6 +1245,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       addClientProject(clientId, input) {
         const id = `prj-${Date.now()}`;
         const stamp = Date.now();
+        const proposedBac = input.proposedBac > 0 ? input.proposedBac : 0;
         setProjects((current) => [
           ...current,
           {
@@ -847,11 +1264,18 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             kickoffPhase: "none",
             ufClp: 39_450,
             usdClp: 940,
-            proposedBac: null,
+            proposedBac: proposedBac || null,
             counterBac: null,
-            budgetNote: "",
+            budgetNote: proposedBac ? "Presupuesto inicial al crear el proyecto" : "",
+            scheduleExample: proposedBac > 0,
           },
         ]);
+        if (proposedBac > 0 && input.startDate && input.finishDate) {
+          setGantt((current) => [
+            ...current.filter((item) => item.projectId !== id),
+            ...defaultScheduleActivities(id, input.startDate, input.finishDate, proposedBac),
+          ]);
+        }
         setKickoffs((current) => [...current, emptyKickoff(id, clientId)]);
         setAssignments((current) => [
           ...current,
@@ -872,6 +1296,41 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         ]);
         setProjectIdState(id);
         return id;
+      },
+      updateClientProject(projectId, input) {
+        const target = projects.find((item) => item.id === projectId);
+        if (!target) return false;
+        const proposedBac = input.proposedBac > 0 ? input.proposedBac : 0;
+        const nextProject: Project = {
+          ...target,
+          name: input.name.trim() || target.name,
+          code: input.code.trim().toUpperCase() || target.code,
+          startDate: input.startDate || target.startDate,
+          finishDate: input.finishDate || target.finishDate,
+          proposedBac: proposedBac || target.proposedBac,
+          budgetNote:
+            proposedBac && !target.budgetNote
+              ? "Presupuesto inicial al crear el proyecto"
+              : target.budgetNote,
+        };
+        setProjects((current) =>
+          current.map((item) =>
+            item.id === projectId
+              ? {
+                  ...nextProject,
+                  scheduleExample:
+                    proposedBac > 0
+                      ? item.scheduleExample || !gantt.some((row) => row.projectId === projectId)
+                      : item.scheduleExample,
+                }
+              : item,
+          ),
+        );
+        if (proposedBac > 0 && nextProject.startDate && nextProject.finishDate) {
+          setGantt((current) => alignExampleSchedule(current, { ...nextProject, scheduleExample: true }, proposedBac));
+        }
+        setProjectIdState(projectId);
+        return true;
       },
       saveKickoff(projectId, patch) {
         setKickoffs((current) => {
@@ -902,7 +1361,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         );
       },
       stampCommercialKickoff(projectId, patch, userId) {
-        if (!coversKickoffRole(sessionUser, "commercial", users, ownerManagesAll)) return false;
+        if (!canEditSoldExtract(sessionUser, users, ownerManagesAll)) return false;
         const existing = kickoffs.find((item) => item.projectId === projectId);
         const project = projects.find((item) => item.id === projectId);
         const kickoff = normalizeKickoff(
@@ -938,7 +1397,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setProjects((current) =>
           current.map((item) =>
             item.id === projectId && item.kickoffPhase !== "internal_done" && item.kickoffPhase !== "client_done"
-              ? { ...item, kickoffPhase: "awaiting_areas" }
+              ? { ...item, kickoffPhase: individual ? "awaiting_pm" : "awaiting_areas" }
               : item,
           ),
         );
@@ -946,7 +1405,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       },
       recordAreaKickoffReview(projectId, input) {
         const project = projects.find((item) => item.id === projectId);
-        if (!project || !input.comment.trim() || !input.stance) return false;
+        if (!project || !input.comment.trim()) return false;
         const existing = kickoffs.find((item) => item.projectId === projectId);
         const base = normalizeKickoff(
           {
@@ -986,7 +1445,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           areaName: area.name,
           role: area.role,
           userId: sessionUser.id,
-          stance: input.stance,
+          stance: input.stance || "ok",
           comment: input.comment.trim(),
           evidenceFileName: input.evidenceFileName?.trim() || "",
           evidenceFileType: input.evidenceFileType ?? "",
@@ -1010,8 +1469,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             if (item.id !== projectId || item.kickoffPhase === "internal_done" || item.kickoffPhase === "client_done") {
               return item;
             }
-            const phase = areaReviewsComplete(next, areas) ? "awaiting_pm" : "awaiting_areas";
-            return { ...item, kickoffPhase: phase };
+            return { ...item, kickoffPhase: item.kickoffPhase === "internal_pending" ? "awaiting_areas" : item.kickoffPhase };
           }),
         );
         const client = clients.find((item) => item.id === project.clientId);
@@ -1025,7 +1483,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           areaId: area.id,
           areaName: area.name,
           role: area.role,
-          stance: input.stance,
+          stance: review.stance,
           comment: review.comment,
           evidenceFileName: review.evidenceFileName,
           proposalTitle: next.proposal.title || next.proposal.fileName,
@@ -1056,9 +1514,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           projectId,
           project?.clientId ?? "",
         );
-        if (!areaReviewsComplete(normalized, areas)) return false;
-        const gate = evaluateInternalGate({ ...normalized, areaReviews: normalized.areaReviews }, areas);
-        if (!gate.canCloseInternal) return false;
+        if (individual) {
+          if (!individualInternalReady(normalized)) return false;
+        } else {
+          return false;
+        }
         const kickoff = normalized.commercialDeliveredAt
           ? normalized
           : {
@@ -1066,9 +1526,21 @@ export function OrgProvider({ children }: { children: ReactNode }) {
               commercialDeliveredAt: new Date().toISOString(),
               commercialDeliveredBy: userId || sessionUser.id,
             };
-        const synthesized = kickoff.finalProposalToClient.trim() || draftFinalProposal(kickoff);
-        const ready = { ...kickoff, finalProposalToClient: synthesized };
-        if (!pmReviewReady(ready)) return false;
+        const synthesized =
+          kickoff.finalProposalToClient.trim() ||
+          (individual
+            ? kickoff.proposal.body.trim() || kickoff.commercialCommitment.trim()
+            : draftFinalProposal(kickoff));
+        const ready = individual
+          ? {
+              ...kickoff,
+              finalProposalToClient: synthesized,
+              pmFit: kickoff.pmFit || "within",
+              pmJudgment: kickoff.pmJudgment.trim() || composeIndividualJudgment(kickoff),
+              plannedStartDate: kickoff.plannedStartDate || project?.startDate || "",
+              plannedFinishDate: kickoff.plannedFinishDate || project?.finishDate || "",
+            }
+          : { ...kickoff, finalProposalToClient: synthesized };
         const validator = userId || ready.pmValidatedBy;
         if (!validator) return false;
         const next = {
@@ -1096,19 +1568,77 @@ export function OrgProvider({ children }: { children: ReactNode }) {
               : item,
           ),
         );
+        const nextStart = next.plannedStartDate || project?.startDate || "";
+        const nextFinish = next.plannedFinishDate || project?.finishDate || "";
+        const budget = registeredBudgetClp(project ?? { bac: 0, proposedBac: null, counterBac: null });
+        if (project?.scheduleExample && nextStart && nextFinish && budget > 0) {
+          setGantt((current) => [
+            ...current.filter((item) => item.projectId !== projectId),
+            ...defaultScheduleActivities(projectId, nextStart, nextFinish, budget),
+          ]);
+        }
+        return true;
+      },
+      openClientKickoff(projectId, patch, userId) {
+        if (individual) return false;
+        if (!canEditSoldExtract(sessionUser, users, ownerManagesAll) && !canEditPmNotes(sessionUser, users, ownerManagesAll)) {
+          return false;
+        }
+        const existing = kickoffs.find((item) => item.projectId === projectId);
+        const project = projects.find((item) => item.id === projectId);
+        if (!project) return false;
+        const kickoff = normalizeKickoff(
+          {
+            ...(existing ?? emptyKickoff(projectId, project.clientId)),
+            ...patch,
+            areaReviews: existing?.areaReviews ?? [],
+            proposal: {
+              ...emptyProposal(),
+              ...existing?.proposal,
+              ...patch?.proposal,
+            },
+            commercialCommitment:
+              patch?.commercialCommitment?.trim() ||
+              existing?.commercialCommitment?.trim() ||
+              patch?.proposal?.body?.trim() ||
+              existing?.proposal?.body?.trim() ||
+              "",
+          },
+          projectId,
+          project.clientId,
+        );
+        if (!collaborativeInternalReady(kickoff)) return false;
+        const now = new Date().toISOString();
+        const next = {
+          ...kickoff,
+          commercialDeliveredBy: kickoff.commercialDeliveredBy || userId || sessionUser.id,
+          commercialDeliveredAt: kickoff.commercialDeliveredAt || now,
+          finalProposalToClient: kickoff.finalProposalToClient.trim() || draftFinalProposal(kickoff),
+          clientDate: kickoff.clientDate || kickoff.clientKickoffDueDate,
+        };
+        setKickoffs((current) => {
+          if (current.some((item) => item.projectId === projectId)) {
+            return current.map((item) => (item.projectId === projectId ? next : item));
+          }
+          return [...current, next];
+        });
+        setProjects((current) =>
+          current.map((item) =>
+            item.id === projectId && item.kickoffPhase !== "client_done"
+              ? { ...item, kickoffPhase: "internal_done" }
+              : item,
+          ),
+        );
         return true;
       },
       confirmClientKickoff(projectId, patch) {
         const existing = kickoffs.find((item) => item.projectId === projectId);
         const target = projects.find((item) => item.id === projectId);
         if (!target) return false;
-        const phase = target.kickoffPhase;
-        if (phase !== "internal_done" && phase !== "client_done") return false;
         const kickoff = {
           ...(existing ?? emptyKickoff(projectId, target.clientId)),
           ...patch,
         };
-        if (!evaluateInternalGate(kickoff, areas).canMeetClient) return false;
         if (!kickoff.clientAgreements?.trim()) return false;
         setKickoffs((current) => {
           const next = { ...kickoff, clientConfirmedAt: new Date().toISOString() };
@@ -1117,10 +1647,41 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           }
           return [...current, next];
         });
+        const nextStart = kickoff.plannedStartDate || target.startDate;
+        const nextFinish = kickoff.plannedFinishDate || target.finishDate;
         setProjects((current) =>
           current.map((item) =>
             item.id === projectId
-              ? { ...item, kickoffPhase: "client_done", status: "active" }
+              ? {
+                  ...item,
+                  kickoffPhase: "client_done",
+                  status: "active",
+                  startDate: nextStart,
+                  finishDate: nextFinish,
+                }
+              : item,
+          ),
+        );
+        const budget = registeredBudgetClp({
+          bac: target.bac,
+          proposedBac: target.proposedBac,
+          counterBac: target.counterBac,
+        });
+        if (target.scheduleExample && nextStart && nextFinish && budget > 0) {
+          setGantt((current) => [
+            ...current.filter((item) => item.projectId !== projectId),
+            ...defaultScheduleActivities(projectId, nextStart, nextFinish, budget),
+          ]);
+        }
+        setProjectIdState(projectId);
+        return true;
+      },
+      activateProject(projectId) {
+        if (!projectId) return false;
+        setProjects((current) =>
+          current.map((item) =>
+            item.id === projectId && item.status === "draft_kickoff"
+              ? { ...item, status: "active" }
               : item,
           ),
         );
@@ -1151,6 +1712,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         return users.filter((item) => ids.has(item.id));
       },
       proposeBudget(id, amountClp, note) {
+        const target = projects.find((item) => item.id === id);
         setProjects((current) =>
           current.map((item) =>
             item.id === id
@@ -1159,12 +1721,15 @@ export function OrgProvider({ children }: { children: ReactNode }) {
                   proposedBac: amountClp,
                   budgetNote: note,
                   status: "budget_proposed",
+                  scheduleExample: item.scheduleExample || !gantt.some((row) => row.projectId === id),
                 }
               : item,
           ),
         );
+        setGantt((current) => alignExampleSchedule(current, target, amountClp));
       },
       counterBudget(id, amountClp, note) {
+        const target = projects.find((item) => item.id === id);
         setProjects((current) =>
           current.map((item) =>
             item.id === id
@@ -1173,10 +1738,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
                   counterBac: amountClp,
                   budgetNote: note,
                   status: "budget_counter",
+                  scheduleExample: item.scheduleExample || !gantt.some((row) => row.projectId === id),
                 }
               : item,
           ),
         );
+        setGantt((current) => alignExampleSchedule(current, target, amountClp));
       },
       acceptBudget(id) {
         setProjects((current) =>
@@ -1186,13 +1753,21 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         );
       },
       approveBudget(id) {
+        const target = projects.find((item) => item.id === id);
+        const bac = target ? target.counterBac ?? target.proposedBac ?? 0 : 0;
         setProjects((current) =>
           current.map((item) => {
             if (item.id !== id) return item;
-            const bac = item.counterBac ?? item.proposedBac ?? 0;
-            return { ...item, bac, status: "active", baselineStatus: "DRAFT" };
+            return {
+              ...item,
+              bac,
+              status: "active",
+              baselineStatus: "DRAFT",
+              scheduleExample: item.scheduleExample || !gantt.some((row) => row.projectId === id),
+            };
           }),
         );
+        setGantt((current) => alignExampleSchedule(current, target, bac));
       },
       addGanttActivity(input) {
         setGantt((current) => [
@@ -1225,6 +1800,9 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           }),
         );
         setGantt((current) => [...current.filter((item) => item.projectId !== project.id), ...imported]);
+        setProjects((current) =>
+          current.map((item) => (item.id === project.id ? { ...item, scheduleExample: false } : item)),
+        );
         return imported.length;
       },
       addProgressReport(input) {
@@ -1245,7 +1823,58 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           note: input.note,
         };
         setReports((current) => [...current, report]);
+        setWorkBook((current) => [
+          ...current,
+          entryFromProgressReport(report, activity, nextFolio(current, project.id)),
+        ]);
         return true;
+      },
+      addWorkBookEntry(input) {
+        const draft = {
+          ...emptyWorkBookEntry(project.id, input.kind, 0, sessionUser.id),
+          body: input.body,
+          occurredOn: input.occurredOn || new Date().toISOString().slice(0, 10),
+          evidenceFileName: input.evidenceFileName ?? "",
+          evidenceFileType: input.evidenceFileType ?? "",
+          evidenceFileSize: input.evidenceFileSize ?? 0,
+          issuer: input.issuer ?? "",
+          reference: input.reference ?? "",
+          dueOn: input.dueOn ?? "",
+          safetyLevel: input.safetyLevel ?? "",
+          location: input.location ?? "",
+          thirdPartyKind: input.thirdPartyKind ?? "",
+          thirdPartyName: input.thirdPartyName ?? "",
+          activityId: input.activityId ?? "",
+          weather: input.weather ?? "",
+          occurredTime: input.occurredTime || new Date().toTimeString().slice(0, 5),
+          source: "manual" as const,
+        };
+        if (!workBookEntryReady(draft)) return false;
+        setWorkBook((current) => {
+          const folio = nextFolio(current, project.id);
+          return [
+            ...current,
+            {
+              ...draft,
+              folio,
+              id: `wb-${Date.now()}-${folio}`,
+            },
+          ];
+        });
+        return true;
+      },
+      saveWorkBookMeta(projectId, patch) {
+        setWorkBookMetas((current) => {
+          const existing = current.find((item) => item.projectId === projectId);
+          const next = normalizeWorkBookMeta({ ...existing, ...patch, projectId }, projectId, patch.contractNumber || existing?.contractNumber);
+          if (!existing) return [...current, next];
+          return current.map((item) => (item.projectId === projectId ? next : item));
+        });
+      },
+      workBookMetaFor(projectId) {
+        const projectRow = projects.find((item) => item.id === projectId);
+        const existing = workBookMetas.find((item) => item.projectId === projectId);
+        return normalizeWorkBookMeta(existing, projectId, existing?.contractNumber || projectRow?.code || "");
       },
       reviewEvidence(reportId, status) {
         setReports((current) =>
@@ -1264,8 +1893,248 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           ),
         );
       },
+      signInWithSso(provider, name, email) {
+        return commitSignIn(provider, name, email);
+      },
+      signInWithEmail(name, email) {
+        return commitSignIn("email", name, email);
+      },
+      loginWithPassword(email, password) {
+        const cleanEmail = normalizeEmail(email);
+        const account = findAccount(accounts, cleanEmail);
+        if (!account) {
+          return {
+            ok: false,
+            code: "unknown",
+            message: "No hay una cuenta con ese correo. Usá Registrar para crear el perfil e iniciar el proceso.",
+          };
+        }
+        if (!account.password) {
+          return {
+            ok: false,
+            code: "invalid",
+            message: `Esta cuenta entra con ${account.provider === "google" ? "Google" : "Microsoft"}. Usá ese botón en Iniciar sesión.`,
+          };
+        }
+        if (account.password !== password) {
+          return {
+            ok: false,
+            code: "bad-password",
+            message: "Clave incorrecta. Desde Registrar podés solicitar reiniciar la clave, o volvé a intentarlo aquí.",
+          };
+        }
+        return openSession(account.name, account.email, account.provider);
+      },
+      registerWithPassword(name, email, password) {
+        const cleanName = name.trim();
+        const cleanEmail = normalizeEmail(email);
+        if (!cleanName || !cleanEmail.includes("@")) {
+          return { ok: false, code: "invalid", message: "Indica nombre y un correo válido." };
+        }
+        if (password.length < PASSWORD_MIN_LENGTH) {
+          return {
+            ok: false,
+            code: "invalid",
+            message: `La clave debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`,
+          };
+        }
+        if (findAccount(accounts, cleanEmail)) {
+          return {
+            ok: false,
+            code: "exists",
+            message:
+              "Este correo ya tiene una cuenta. Enviá una solicitud para reiniciar la clave, o intentá de nuevo en Iniciar sesión.",
+          };
+        }
+        setAccounts((current) => [
+          ...current,
+          {
+            email: cleanEmail,
+            name: cleanName,
+            password,
+            provider: "email",
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        return openSession(cleanName, cleanEmail, "email");
+      },
+      loginWithSso(provider, name, email) {
+        const cleanEmail = normalizeEmail(email);
+        const account = findAccount(accounts, cleanEmail);
+        if (!account) {
+          return {
+            ok: false,
+            code: "unknown",
+            message: "Esa cuenta SSO no está registrada. Usá Registrar para crear el perfil.",
+          };
+        }
+        return openSession(account.name || name, account.email, provider);
+      },
+      registerWithSso(provider, name, email) {
+        const cleanName = name.trim();
+        const cleanEmail = normalizeEmail(email);
+        if (!cleanName || !cleanEmail.includes("@")) {
+          return { ok: false, code: "invalid", message: "Indica nombre y un correo válido." };
+        }
+        if (findAccount(accounts, cleanEmail)) {
+          return {
+            ok: false,
+            code: "exists",
+            message:
+              "Este correo ya tiene una cuenta. Enviá una solicitud para reiniciar la clave, o intentá de nuevo en Iniciar sesión.",
+          };
+        }
+        setAccounts((current) => [
+          ...current,
+          {
+            email: cleanEmail,
+            name: cleanName,
+            password: "",
+            provider,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        return openSession(cleanName, cleanEmail, provider);
+      },
+      requestPasswordReset(email) {
+        const cleanEmail = normalizeEmail(email);
+        const account = findAccount(accounts, cleanEmail);
+        if (!account) {
+          return { ok: false, message: "No hay una cuenta con ese correo." };
+        }
+        setAccounts((current) =>
+          current.map((item) =>
+            item.email === cleanEmail ? { ...item, resetRequestedAt: new Date().toISOString() } : item,
+          ),
+        );
+        return {
+          ok: true,
+          message: "Solicitud enviada. En este laboratorio podés definir una clave nueva ahora, o volver a Iniciar sesión.",
+        };
+      },
+      completePasswordReset(email, password) {
+        const cleanEmail = normalizeEmail(email);
+        const account = findAccount(accounts, cleanEmail);
+        if (!account) return { ok: false, message: "No hay una cuenta con ese correo." };
+        if (!account.resetRequestedAt) {
+          return { ok: false, message: "Primero enviá la solicitud para reiniciar la clave." };
+        }
+        if (password.length < PASSWORD_MIN_LENGTH) {
+          return { ok: false, message: `La clave debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.` };
+        }
+        setAccounts((current) =>
+          current.map((item) =>
+            item.email === cleanEmail ? { ...item, password, provider: "email", resetRequestedAt: undefined } : item,
+          ),
+        );
+        return { ok: true, message: "Clave actualizada. Volvé a Iniciar sesión." };
+      },
+      continueAsFounder() {
+        const founder = users.find((item) => item.role === "owner" && item.email.includes("@"));
+        if (!founder || setupPhase !== "done") {
+          return { ok: false, message: "No hay un representante con ambiente cerrado en este navegador." };
+        }
+        setIdentity({
+          name: founder.name || "Representante",
+          email: normalizeEmail(founder.email),
+          provider: "email",
+          path: "new-org",
+          signedInAt: new Date().toISOString(),
+        });
+        setSessionUserIdState(founder.id);
+        return { ok: true, next: "app", intro: !founder.introSeen };
+      },
+      startNewOrganization(options) {
+        if (!identity) return { ok: false, message: "Primero iniciá sesión o registrate." };
+        return beginNewOrganization(identity, options?.replaceExisting);
+      },
+      joinExistingEnvironment() {
+        if (!identity) return { ok: false, code: "no-identity" as const };
+        const result = resolveJoin(users, setupPhase, tenant.name, identity.email);
+        if (!result.ok) return result;
+        setIdentity({ ...identity, path: "join" });
+        setSessionUserIdState(result.userId);
+        return result;
+      },
+      signOut() {
+        setIdentity(null);
+      },
+      beginRegistration(options) {
+        const session: Identity = {
+          name: "",
+          email: "",
+          provider: "email",
+          path: "new-org",
+          signedInAt: new Date().toISOString(),
+        };
+        return beginNewOrganization(session, options?.replaceExisting);
+      },
+      identifyRepresentative(payload) {
+        const founderName = joinPersonName(payload.firstName, payload.lastName) || payload.name.trim();
+        const founderEmail = normalizeEmail(payload.email);
+        const provider = payload.provider === "google" || payload.provider === "microsoft" ? payload.provider : "email";
+        if (!founderName || !founderEmail.includes("@")) {
+          return { ok: false, code: "invalid", message: "Completá nombre, apellido y un correo válido." };
+        }
+        if (provider === "email") {
+          if (payload.password.length < PASSWORD_MIN_LENGTH) {
+            return {
+              ok: false,
+              code: "invalid",
+              message: `La clave de inicio de sesión debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`,
+            };
+          }
+          if (payload.password !== payload.passwordConfirm) {
+            return { ok: false, code: "invalid", message: "La clave y su confirmación no coinciden." };
+          }
+        }
+        if (findAccount(accounts, founderEmail)) {
+          return {
+            ok: false,
+            code: "exists",
+            message:
+              "Este correo ya tiene una cuenta. Iniciá sesión o solicitá reiniciar la clave desde la pantalla de entrada.",
+          };
+        }
+        setAccounts((current) => [
+          ...current,
+          {
+            email: founderEmail,
+            name: founderName,
+            password: provider === "email" ? payload.password : "",
+            provider,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        setIdentity({
+          name: founderName,
+          email: founderEmail,
+          provider,
+          path: "new-org",
+          signedInAt: new Date().toISOString(),
+        });
+        setUsers((current) => {
+          const founder = current.find((item) => item.id === founderDraft.id) ?? founderDraft;
+          const rest = current.filter((item) => item.id !== founderDraft.id);
+          return [{ ...founder, name: founderName, email: founderEmail, introSeen: true }, ...rest];
+        });
+        setSessionUserIdState(founderDraft.id);
+        return { ok: true };
+      },
       completeRegister(payload) {
+        const founderName = identity?.name.trim() || sessionUser.name.trim();
+        const founderEmail = normalizeEmail(identity?.email || "");
+        if (!founderName || !founderEmail.includes("@")) {
+          return {
+            ok: false,
+            code: "invalid",
+            message: "Primero identificá al representante con correo o con Google / Microsoft.",
+          };
+        }
         const company = payload.company.trim();
+        if (!company || !payload.rut.trim()) {
+          return { ok: false, code: "invalid", message: "Completá razón social y RUT." };
+        }
         const nextTenant: Tenant = {
           ...tenant,
           id: "tenant-local",
@@ -1274,8 +2143,6 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           createdAt: tenant.createdAt || isoDate(new Date()),
           rut: payload.rut.trim(),
         };
-        const founderName = payload.name.trim();
-        const founderEmail = payload.email.trim().toLowerCase();
         setTenant(nextTenant);
         setUsers((current) => {
           const founder = current.find((item) => item.id === founderDraft.id) ?? founderDraft;
@@ -1284,6 +2151,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         });
         setSessionUserIdState(founderDraft.id);
         setSetupPhase("mode");
+        return { ok: true };
       },
       completeOperatingMode(payload) {
         if (payload.operatingMode === "collaborative") {
@@ -1509,11 +2377,21 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setInvites([]);
         setProfiles(applyOwnerCoverage(initialProfiles));
         setAreas(initialAreas);
-        setUsers([{ ...founderDraft }]);
+        setUsers([
+          {
+            ...founderDraft,
+            name: identity?.name ?? "",
+            email: identity?.email ?? "",
+            introSeen: true,
+          },
+        ]);
+        if (identity) setIdentity({ ...identity, path: "new-org" });
         setAssignments([]);
         setProjects([]);
         setGantt([]);
         setReports([]);
+        setWorkBook([]);
+        setWorkBookMetas([]);
         setSessionUserIdState(founderDraft.id);
         setProjectIdState("");
         localStorage.removeItem(SETUP_STORAGE_KEY);
@@ -1543,9 +2421,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         return byCoverage?.name;
       },
       handedRoles: handed,
-    }),
+    };
+    },
     [
       hydrated,
+      identity,
       setupPhase,
       ownerManagesAll,
       tenant,
@@ -1561,6 +2441,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       visibleProjects,
       gantt,
       reports,
+      workBook,
+      workBookMetas,
       project,
       sessionUser,
       role,
@@ -1571,6 +2453,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       extraPermissions,
       ownerBlocked,
       individual,
+      accounts,
     ],
   );
 

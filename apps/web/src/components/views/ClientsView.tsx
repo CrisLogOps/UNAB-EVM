@@ -21,9 +21,9 @@ export function ClientsView() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Después de armar la empresa</p>
           <h1 className="text-2xl font-semibold">Clientes y kickoff</h1>
           <p className="max-w-2xl text-sm text-slate-600">
-            Registra al cliente y el proyecto. En el kickoff interno, Comercial adjunta la propuesta
-            inicial; todas las áreas comentan el mismo documento; el gestor arma la propuesta final al
-            cliente. Esos comentarios quedan en la base de conocimiento.
+            Registra al cliente y el proyecto, con su presupuesto inicial. El kickoff interno y el del
+            cliente son opcionales: el administrador o el gestor pueden completarlos, o saltarlos para
+            migrar una obra que ya está en curso.
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
@@ -47,8 +47,8 @@ export function ClientsView() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Cartera</p>
           <h1 className="text-2xl font-semibold">Clientes</h1>
           <p className="text-sm text-slate-600">
-            Cada cliente tiene sus proyectos. El kickoff interno pide la propuesta inicial, el
-            comentario de cada área y el cierre del gestor. Los registros alimentan la{" "}
+            Cada cliente tiene sus proyectos. El kickoff es opcional: sirve para registrar lo vendido y los
+            acuerdos, o se salta si la obra ya está en desarrollo. Los registros alimentan la{" "}
             <Link href="/knowledge" className="underline">
               base de conocimiento
             </Link>
@@ -62,7 +62,7 @@ export function ClientsView() {
               setResumeId(undefined);
               setCreating(true);
             }}
-            className="rounded-md bg-[var(--brand)] px-3 py-2 text-sm text-white hover:bg-[var(--brand-dark)]"
+            className="min-h-11 w-full rounded-md bg-[var(--brand)] px-3 py-2 text-sm text-white hover:bg-[var(--brand-dark)] sm:w-auto"
           >
             Nuevo cliente o proyecto
           </button>
@@ -96,35 +96,25 @@ export function ClientsView() {
                         <p className="text-xs text-slate-500">{KICKOFF_PHASE_LABEL[project.kickoffPhase]}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {project.kickoffPhase !== "client_done" ? (
-                          <button
-                            type="button"
-                            className="rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
-                            onClick={() => {
-                              setResumeId(project.id);
-                              setCreating(true);
-                            }}
-                          >
-                            Continuar kickoff
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
-                            onClick={() => router.push("/knowledge")}
-                          >
-                            Ver base de conocimiento
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="rounded-md border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
+                          onClick={() => {
+                            setResumeId(project.id);
+                            setCreating(true);
+                          }}
+                        >
+                          {project.kickoffPhase === "client_done" ? "Editar proyecto" : "Continuar / editar proyecto"}
+                        </button>
                         <button
                           type="button"
                           className="rounded-md bg-[var(--brand)] px-3 py-1.5 text-xs text-white"
                           onClick={() => {
                             setProjectId(project.id);
-                            router.push(project.kickoffPhase === "client_done" ? "/gantt" : "/clients");
+                            router.push("/gantt");
                           }}
                         >
-                          {project.kickoffPhase === "client_done" ? "Calendario" : "Abrir"}
+                          Cronograma
                         </button>
                       </div>
                     </li>

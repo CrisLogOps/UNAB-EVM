@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 
 export interface Column<T> {
@@ -9,12 +9,13 @@ export interface Column<T> {
   accessor?: keyof T;
   render?: (row: T) => ReactNode;
   className?: string;
+  hideOnMobile?: boolean;
 }
 
 export interface TableAction<T> {
   label: string;
   onClick: (row: T) => void;
-  variant?: "view" | "edit" | "delete";
+  variant?: "view" | "edit" | "delete" | "key";
 }
 
 interface DataTableProps<T> {
@@ -33,6 +34,7 @@ const ACTION_ICON = {
   view: Eye,
   edit: Pencil,
   delete: Trash2,
+  key: KeyRound,
 };
 
 export function DataTable<T>({
@@ -64,12 +66,14 @@ export function DataTable<T>({
     return "";
   }
 
+  const mobileColumns = columns.filter((column) => !column.hideOnMobile);
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       {filterFn ? (
         <div className="border-b border-slate-100 p-3">
           <input
-            className="w-full rounded-md border border-slate-200 px-3 py-2"
+            className="w-full min-w-0 rounded-md border border-slate-200 px-3 py-2"
             placeholder={filterPlaceholder}
             value={query}
             onChange={(event) => {
@@ -91,11 +95,16 @@ export function DataTable<T>({
               } ${onRowClick ? "cursor-pointer" : ""}`}
               onClick={() => onRowClick?.(row)}
             >
-              <dl className="space-y-2">
-                {columns.map((column) => (
-                  <div key={column.key} className="flex items-start justify-between gap-3">
-                    <dt className="shrink-0 text-xs text-slate-500">{column.header}</dt>
-                    <dd className="min-w-0 text-right text-sm break-words">{cell(row, column)}</dd>
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+                {mobileColumns.map((column, index) => (
+                  <div
+                    key={column.key}
+                    className={index < 2 ? "col-span-2 flex items-start justify-between gap-3" : "min-w-0"}
+                  >
+                    <dt className="text-[11px] text-slate-500">{column.header}</dt>
+                    <dd className={`min-w-0 text-sm break-words ${index < 2 ? "text-right" : "mt-0.5"}`}>
+                      {cell(row, column)}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -188,7 +197,7 @@ export function DataTable<T>({
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-        <span>
+        <span className="shrink-0">
           {filtered.length} registro{filtered.length === 1 ? "" : "s"}
         </span>
         <div className="flex gap-2">
@@ -196,18 +205,18 @@ export function DataTable<T>({
             type="button"
             disabled={currentPage <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="rounded border border-slate-200 px-3 py-2 disabled:opacity-40"
+            className="min-h-10 rounded border border-slate-200 px-3 py-2 disabled:opacity-40"
           >
             Anterior
           </button>
-          <span className="self-center">
+          <span className="self-center tabular-nums">
             {currentPage} / {totalPages}
           </span>
           <button
             type="button"
             disabled={currentPage >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            className="rounded border border-slate-200 px-3 py-2 disabled:opacity-40"
+            className="min-h-10 rounded border border-slate-200 px-3 py-2 disabled:opacity-40"
           >
             Siguiente
           </button>

@@ -19,6 +19,7 @@
 | [2026-09-13_Flujo_Proceso_Proyecto_Adjudicacion_a_Garantias_Rev3.xlsx](./2026-09-13_Flujo_Proceso_Proyecto_Adjudicacion_a_Garantias_Rev3.xlsx) | Libro canónico (Resumen_Fases + Flujo_Detallado) |
 | [local-mvp.md](./local-mvp.md) | Arranque local (Docker + API + Next) y SQL de prueba para Supabase |
 | [despliegue-railway.md](./despliegue-railway.md) | **GitHub + Railway** — por qué no Pages/Netlify solo; cómo publicar para trabajar con un compañero |
+| [requisitos-minimos-servidor-mvp.md](./requisitos-minimos-servidor-mvp.md) | **Ficha para pedir un servidor** — arquitectura MVP, lenguajes, Postgres, sizing y checklist de validación |
 | [templates/issues-arranque/](./templates/issues-arranque/) | Textos de Issues para pegar en GitHub (W34 + epic + aviso foco) |
 | [roadmap.md](./roadmap.md) | Cronograma Seminario 1 → Seminario 2 |
 | `api-openapi.yaml` | Contrato OpenAPI (pendiente de generación) |

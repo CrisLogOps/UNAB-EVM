@@ -19,8 +19,8 @@ export function ProjectsView() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Las obras que te tocan</p>
           <h1 className="text-2xl font-semibold">Obras</h1>
           <p className="text-sm text-slate-600">
-            Crea obras desde <strong>Clientes</strong>: cada proyecto nace con kickoff interno y kickoff
-            con el cliente. Finanzas carga el presupuesto después.
+            Crea obras desde <strong>Clientes</strong>: en la fase Proyecto se registra el presupuesto
+            inicial para armar el cronograma. El kickoff es opcional.
           </p>
         </div>
         {canEdit ? (
@@ -80,7 +80,7 @@ export function ProjectsView() {
             variant: "view",
             onClick: (row) => {
               setProjectId(row.id);
-              router.push(row.kickoffPhase === "client_done" ? "/gantt" : "/clients");
+              router.push("/gantt");
             },
           },
         ]}

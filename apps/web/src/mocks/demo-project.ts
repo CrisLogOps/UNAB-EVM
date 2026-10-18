@@ -1,4 +1,5 @@
 import { computeMetrics } from "@/lib/evm";
+import { emptyTenantIntegrations } from "@/lib/tenant-integrations";
 import type { Project, ProgressReport, Task, Tenant } from "@/lib/types";
 
 export const demoTenant: Tenant = {
@@ -10,6 +11,7 @@ export const demoTenant: Tenant = {
   activityType: "obras-civiles",
   companySize: "medium",
   operatingMode: "collaborative",
+  integrations: emptyTenantIntegrations(),
 };
 
 export const demoProject: Project = {
@@ -31,6 +33,7 @@ export const demoProject: Project = {
   budgetNote: "Presupuesto Meta v1.0 ya validado.",
   clientId: "",
   kickoffPhase: "client_done",
+  scheduleExample: false,
 };
 
 export const demoTasks: Task[] = [

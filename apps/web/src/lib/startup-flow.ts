@@ -1,5 +1,5 @@
 import { ROLE_LABELS } from "./constants";
-import { areaReviewsComplete, areasUserCanReview, coversKickoffRole, evaluateInternalGate, partiesValidated, pendingAreas, proposalReady } from "./kickoff";
+import { areasUserCanReview, partiesValidated, pendingAreas, proposalReady } from "./kickoff";
 import type { TeamCoverageMode } from "./coverage";
 import type {
   AtomicPermission,
@@ -110,7 +110,7 @@ function isIndependentFlow(input: StartupFlowInput) {
 function contextCopy(input: StartupFlowInput) {
   const independent = isIndependentFlow(input);
   if (independent) {
-    return "Como profesional independiente cubres todo el arranque: cliente, proyecto, lo que se vendió, presupuesto y calendario. El control de la obra se enciende cuando eso está listo. La pestaña Modo permite pasar a colaborativo sin rehacer el alta.";
+    return "Como profesional independiente cubres el arranque: cliente, proyecto, kickoff interno (lo vendido + criterio PMBOK, sin áreas) y kickoff con el cliente. El control se enciende con el cronograma. La pestaña Modo permite pasar a colaborativo sin rehacer el alta.";
   }
   if (input.coverageMode === "counterpart") {
     return "Hay contraparte. Cada perfil ve en Inicio lo que le falta; lo demás espera a la otra persona.";
@@ -121,12 +121,15 @@ function contextCopy(input: StartupFlowInput) {
 export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
   const realProject = input.project.id !== "prj-pending" && input.projects.length > 0;
   const kickoff = input.kickoff;
+  const independent = isIndependentFlow(input);
   const commercialDone = Boolean(kickoff?.commercialDeliveredAt) || Boolean(kickoff && proposalReady(kickoff.proposal));
-  const gate = kickoff ? evaluateInternalGate(kickoff, input.areas) : undefined;
-  const areasDone = Boolean(kickoff && areaReviewsComplete(kickoff, input.areas));
-  const pmDone = Boolean(kickoff?.pmValidatedAt) || Boolean(kickoff && partiesValidated(kickoff));
+  const commentsStarted = Boolean(kickoff?.areaReviews.length);
+  const consultationDone = Boolean(kickoff?.internalDate && kickoff?.clientKickoffDueDate);
+  const pmDone = independent
+    ? Boolean(kickoff?.pmValidatedAt) || Boolean(kickoff && partiesValidated(kickoff))
+    : consultationDone;
   const clientKickoffDone = input.project.kickoffPhase === "client_done";
-  const internalReady = Boolean(gate?.canMeetClient);
+  const kickoffBypassed = realProject && input.project.status !== "draft_kickoff" && !clientKickoffDone;
   const budgetLoaded =
     Boolean(input.project.bac) ||
     input.project.proposedBac != null ||
@@ -135,8 +138,8 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
     input.project.status === "pending_approval";
   const budgetReviewed = Boolean(input.project.bac) || input.project.status === "pending_approval";
   const budgetApproved = Boolean(input.project.bac);
-  const scheduleDone = clientKickoffDone && input.scheduleCount > 0;
-  const showTeam = !isIndependentFlow(input);
+  const scheduleDone = realProject && input.scheduleCount > 0;
+  const showTeam = !independent;
   const teamDone = input.assignmentCount > 0;
 
   const drafts: Omit<StartupStep, "current">[] = [
@@ -155,7 +158,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
       id: "project",
       code: "F1.1",
       title: "Crear el proyecto",
-      detail: "Nombre, código y fechas previstas de la obra.",
+      detail: "Nombre, código, fechas previstas y presupuesto inicial. Ese monto arma el cronograma.",
       href: "/clients",
       done: realProject,
       yours: isActor(input.role, "pmo", input.ownerManagesAll, input.users, ["owner", "pmo", "commercial"]),
@@ -178,59 +181,78 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
     });
   }
 
-  drafts.push(
-    {
+  if (independent) {
+    drafts.push({
       id: "kickoff_commercial",
       code: "F1.5",
-      title: "Propuesta inicial de Comercial",
-      detail: "Escribe el extracto de lo vendido. El archivo es opcional.",
-      href: realProject ? "/demo" : "/clients",
-      done: commercialDone,
-      yours: isActor(input.role, "commercial", input.ownerManagesAll, input.users, ["owner", "pmo", "commercial"]),
-      waitingOn: waitingLabel(input.users, "commercial", input.ownerManagesAll),
-      actionLabel: realProject ? "Escribir extracto" : "Cargar propuesta",
-    },
-    {
-      id: "kickoff_areas",
-      code: "F2.1",
-      title: "Revisión de antecedentes técnicos",
-      detail: "Cada área involucrada deja por escrito por qué se justifica el proyecto (F2.1 del flujo Rev3). Un documento de respaldo es opcional. El administrador ve todo y no comenta a nombre de otra área. Sin esas razones no hay kickoff con el cliente.",
-      href: "/demo",
-      done: areasDone,
-      yours:
-        commercialDone &&
-        !areasDone &&
-        areasUserCanReview(input.sessionUser, input.areas, input.users, input.ownerManagesAll).some((area) =>
-          pendingAreas(kickoff, input.areas).some(
-            (pending) => pending.id === area.id,
-          ),
-        ),
-      waitingOn: kickoff
-        ? pendingAreas(kickoff, input.areas)
-            .map((item) => item.name)
-            .join(", ") || "las áreas"
-        : "las áreas",
-      actionLabel: "Comentar en Inicio",
-    },
-    {
-      id: "kickoff_pm",
-      code: "F2.2",
-      title: "Kickoff interno · juicio del gestor",
-      detail: "El gestor sintetiza el conocimiento de las áreas. Solo cierra si el criterio crítico lo permite.",
+      title: "Kickoff interno",
+      detail:
+        "Opcional. Registrá lo vendido, notas para el cliente y el criterio PMBOK, o saltá el kickoff si la obra ya está en curso.",
       href: "/clients",
-      done: pmDone,
-      yours: coversKickoffRole(input.sessionUser, "pmo", input.users, input.ownerManagesAll),
-      waitingOn: waitingLabel(input.users, "pmo", input.ownerManagesAll),
-      actionLabel: "Confirmar como gestor",
-    },
+      done: pmDone || kickoffBypassed,
+      yours: true,
+      waitingOn: "tú",
+      actionLabel: "Abrir kickoff interno",
+    });
+  } else {
+    drafts.push(
+      {
+        id: "kickoff_commercial",
+        code: "F1.5",
+        title: "Extracto de lo vendido",
+        detail: "Opcional. El administrador o el gestor escriben el alcance. No hace falta un área comercial.",
+        href: realProject ? "/demo" : "/clients",
+        done: commercialDone || kickoffBypassed,
+        yours: input.role === "owner" || input.role === "pmo" || input.role === "commercial",
+        waitingOn: waitingLabel(input.users, "pmo", input.ownerManagesAll),
+        actionLabel: realProject ? "Escribir extracto" : "Cargar propuesta",
+      },
+      {
+        id: "kickoff_areas",
+        code: "F2.1",
+        title: "Comentarios de las áreas",
+        detail:
+          "Opcional. Cada área puede comentar lo vendido. No bloquea el cronograma ni exige un área comercial.",
+        href: "/demo",
+        done: commercialDone || kickoffBypassed,
+        yours:
+          commercialDone &&
+          !commentsStarted &&
+          !consultationDone &&
+          areasUserCanReview(input.sessionUser, input.areas, input.users, input.ownerManagesAll).some((area) =>
+            pendingAreas(kickoff, input.areas).some((pending) => pending.id === area.id),
+          ),
+        waitingOn: kickoff
+          ? pendingAreas(kickoff, input.areas)
+              .map((item) => item.name)
+              .join(", ") || "las áreas"
+          : "las áreas",
+        actionLabel: "Comentar en Inicio",
+      },
+      {
+        id: "kickoff_pm",
+        code: "F2.2",
+        title: "Fecha de consulta y comentarios del gestor",
+        detail:
+          "Opcional. El administrador o el gestor fijan la fecha de consulta y el plazo con el cliente.",
+        href: "/clients",
+        done: pmDone || kickoffBypassed,
+        yours: input.role === "pmo" || input.role === "owner",
+        waitingOn: waitingLabel(input.users, "pmo", input.ownerManagesAll),
+        actionLabel: "Fijar plazo de consulta",
+      },
+    );
+  }
+
+  drafts.push(
     {
       id: "kickoff_client",
       code: "F2.4",
       title: "Kickoff con el cliente",
-      detail: "Cierra acuerdos con el cliente. Ahí se abre el cronograma.",
+      detail: "Opcional. El administrador o el gestor registran acuerdos. El cronograma no espera este paso.",
       href: "/clients",
-      done: clientKickoffDone,
-      yours: isActor(input.role, "pmo", input.ownerManagesAll, input.users, ["owner", "pmo", "commercial"]),
+      done: clientKickoffDone || kickoffBypassed,
+      yours: input.role === "owner" || input.role === "pmo",
       waitingOn: waitingLabel(input.users, "pmo", input.ownerManagesAll),
       actionLabel: "Cerrar con el cliente",
     },
@@ -274,13 +296,13 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
     {
       id: "schedule",
       code: "F3.1",
-      title: "Cargar el calendario",
-      detail: "Actividades con inicio y término (F3.1–F3.2). Con eso arranca el control (curva S, CPI y SPI).",
+      title: "Cargar el cronograma",
+      detail: "Se carga la plantilla EDT cuando hay presupuesto registrado. Las partidas heredan ese BAC.",
       href: "/gantt",
       done: scheduleDone,
       yours: isActor(input.role, "pmo", input.ownerManagesAll, input.users, ["owner", "pmo"]),
       waitingOn: waitingLabel(input.users, "pmo", input.ownerManagesAll),
-      actionLabel: "Abrir calendario",
+      actionLabel: "Abrir cronograma",
     },
   );
 
@@ -290,12 +312,12 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
     team: !realProject,
     kickoff_commercial: !realProject,
     kickoff_areas: !commercialDone,
-    kickoff_pm: !areasDone,
-    kickoff_client: !internalReady,
+    kickoff_pm: !commercialDone,
+    kickoff_client: !realProject,
     budget_load: !realProject,
     budget_review: !budgetLoaded,
     budget_approve: !budgetReviewed,
-    schedule: !clientKickoffDone,
+    schedule: !budgetLoaded,
   };
 
   const currentId = drafts.find((step) => !step.done && !lockedUntil[step.id])?.id;
@@ -306,7 +328,6 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
 
   const next = steps.find((item) => item.current);
   const controlReady = clientKickoffDone && scheduleDone;
-  const independent = isIndependentFlow(input);
 
   let headline = `Hola, ${ROLE_LABELS[input.role]}`;
   if (next?.yours) headline = `Te toca: ${next.title.toLowerCase()}`;

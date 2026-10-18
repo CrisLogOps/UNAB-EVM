@@ -5,18 +5,14 @@ import Link from "next/link";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
 import {
-  COMMERCIAL_FIT_OPTIONS,
   MIN_AREA_JUSTIFICATION,
-  REVIEW_STANCE_OPTIONS,
   VERDICT_LABEL,
   areaReviewFor,
-  areaReviewsComplete,
   actsAsSoleOperator,
   areasNeedingCounterpart,
   areasUserCanReview,
+  canEditSoldExtract,
   counterpartForArea,
-  coversKickoffRole,
-  draftFinalProposal,
   emptyProposal,
   evaluateInternalGate,
   involvedAreas,
@@ -25,8 +21,6 @@ import {
   relatedKnowledge,
 } from "@/lib/kickoff";
 import type {
-  CommercialFit,
-  KickoffReviewStance,
   KnowledgeEntry,
   OrgArea,
   ProjectKickoff,
@@ -50,8 +44,6 @@ export function KickoffAreaPanel({
     recordAreaKickoffReview,
     saveKickoff,
     stampCommercialKickoff,
-    confirmInternalKickoff,
-    project,
     knowledge,
     tenant,
   } = useOrg();
@@ -60,24 +52,21 @@ export function KickoffAreaPanel({
   const sole = actsAsSoleOperator(users, ownerManagesAll);
   const writable = areasUserCanReview(sessionUser, areas, users, ownerManagesAll);
   const ready = proposalReady(kickoff.proposal);
-  const areasDone = areaReviewsComplete(kickoff, areas);
   const gate = evaluateInternalGate(kickoff, areas);
-  const locked = Boolean(kickoff.clientConfirmedAt) || (Boolean(kickoff.pmValidatedAt) && gate.canMeetClient);
-  const canStampCommercial = coversKickoffRole(sessionUser, "commercial", users, ownerManagesAll);
-  const canClosePm = coversKickoffRole(sessionUser, "pmo", users, ownerManagesAll);
-  const pmCounterpart = users.find((item) => item.active && item.profileId && item.role === "pmo");
+  const locked = Boolean(kickoff.clientConfirmedAt);
+  const canStampCommercial = canEditSoldExtract(sessionUser, users, ownerManagesAll);
   const missingCounterparts = sole ? [] : areasNeedingCounterpart(areas, users, sessionUser.areaId);
   const [extract, setExtract] = useState(kickoff.proposal.body ?? "");
   const [extractError, setExtractError] = useState<string | null>(null);
 
   function persistExtract() {
     if (!canStampCommercial) {
-      setExtractError("La propuesta la registra Comercial. El administrador puede verla, no firmarla a nombre de esa área.");
+      setExtractError("El extracto lo registran el administrador o el gestor de proyectos.");
       return false;
     }
     const body = extract.trim();
     if (!body) {
-      setExtractError("Escribe el extracto para que las áreas evalúen la misma propuesta.");
+      setExtractError("Escribe el extracto para que las áreas puedan comentar la misma propuesta.");
       return false;
     }
     const proposal = {
@@ -107,13 +96,12 @@ export function KickoffAreaPanel({
   return (
     <section className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/70 p-3">
       <div>
-        <h3 className="font-semibold">Kickoff interno · criterio crítico de las áreas</h3>
+        <h3 className="font-semibold">Kickoff interno · comentarios de las áreas</h3>
         <p className="text-xs text-slate-600">
           {sole
-            ? "Eres el único integrante: puedes completar el levantamiento inicial de todas las áreas."
-            : "Hay más integrantes. El administrador registra lo de su área (cliente, obra y dirección) y pide contraparte al resto de áreas de la organización."}{" "}
-          Un documento de respaldo es opcional. Con las razones de cada área el gestor cierra el kickoff interno
-          y recién ahí se abre el del cliente.
+            ? "Eres el único integrante: puedes dejar comentarios de todas las áreas."
+            : "Cada área deja comentarios sobre lo vendido. No hay validación de viabilidad: los comentarios quedan como registro y no impiden continuar."}{" "}
+          Un documento de respaldo es opcional.
         </p>
       </div>
 
@@ -125,7 +113,7 @@ export function KickoffAreaPanel({
           <Link href="/users" className="font-medium underline">
             Asignar personas
           </Link>{" "}
-          para que cada una registre sus razones.
+          para que cada una deje comentarios.
         </p>
       ) : null}
 
@@ -141,17 +129,15 @@ export function KickoffAreaPanel({
                 setExtract(event.target.value);
                 setExtractError(null);
               }}
-              placeholder="Alcance, plazos, supuestos y exclusiones. Con este texto las áreas evalúan la misma propuesta."
+              placeholder="Alcance, plazos, supuestos y exclusiones. Con este texto las áreas comentan la misma propuesta."
               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm disabled:bg-slate-50"
             />
           </label>
           {extractError ? <p className="text-xs text-red-700">{extractError}</p> : null}
           {canStampCommercial ? null : (
             <p className="text-xs text-slate-600">
-              {users.some((item) => item.active && item.profileId && item.role === "commercial")
-                ? "El extracto lo registra Comercial. Aquí solo se consulta."
-                : "Comercial es un área de la organización: asigna una contraparte en Personas para que registre el extracto."}{" "}
-              Cambia de puesto en <span className="font-medium">Ver como</span> si ya hay alguien, o espera a esa persona.
+              El extracto lo registran el administrador o el gestor. Cambia de puesto en{" "}
+              <span className="font-medium">Ver como</span> si estás en otro perfil.
             </p>
           )}
           {locked || !canStampCommercial ? null : (
@@ -160,7 +146,7 @@ export function KickoffAreaPanel({
               onClick={persistExtract}
               className="rounded-md bg-sky-800 px-3 py-1.5 text-xs text-white hover:bg-sky-900"
             >
-              {ready ? "Actualizar extracto" : "Guardar extracto y habilitar validación"}
+              {ready ? "Actualizar extracto" : "Guardar extracto y habilitar comentarios"}
             </button>
           )}
         </div>
@@ -171,8 +157,8 @@ export function KickoffAreaPanel({
         </div>
       ) : (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-          Escribe el extracto de la propuesta en el recuadro de Comercial (arriba). Con ese texto las áreas
-          pueden justificar el desarrollo.
+          Escribe el extracto de lo vendido arriba. Con ese texto las áreas pueden comentar. No hace falta un
+          área comercial.
         </p>
       )}
 
@@ -200,41 +186,13 @@ export function KickoffAreaPanel({
         ))}
       </ul>
 
-      {showExtract && areasDone && !locked && canClosePm ? (
-        <PmCloseForm
-          projectId={projectId}
-          kickoff={kickoff}
-          projectStart={project.startDate}
-          projectFinish={project.finishDate}
-          onConfirm={confirmInternalKickoff}
-          userId={sessionUser.id}
-          requirePlan={gate.verdict === "conditional"}
-          canClose={gate.canCloseInternal}
-          blockReason={gate.reasons[0]}
-        />
-      ) : null}
-
-      {showExtract && areasDone && !locked && !canClosePm ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-          Las áreas ya dejaron sus razones. El cierre interno lo registra el gestor de proyectos
-          {pmCounterpart ? ` (${pmCounterpart.name || pmCounterpart.email})` : ""}. El administrador
-          consulta y no confirma a nombre del gestor.
+      {showExtract && gate.canMeetClient ? (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
+          Extracto y plazo listos.{" "}
+          <Link href="/clients" className="font-medium underline">
+            Continuar al kickoff con el cliente
+          </Link>
         </p>
-      ) : null}
-
-      {showExtract && kickoff.pmValidatedAt ? (
-        gate.canMeetClient ? (
-          <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
-            Criterio crítico aprobado.{" "}
-            <Link href="/clients" className="font-medium underline">
-              Continuar al kickoff con el cliente
-            </Link>
-          </p>
-        ) : (
-          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-950">
-            El kickoff con el cliente sigue bloqueado. {gate.reasons[0] ?? "Completa la validación interna."}
-          </p>
-        )
       ) : null}
 
       {pending.length && !showExtract ? (
@@ -253,12 +211,7 @@ function CriticalGateBoard({
   gate: ReturnType<typeof evaluateInternalGate>;
   involved: OrgArea[];
 }) {
-  const tone =
-    gate.verdict === "go"
-      ? "border-emerald-300 bg-emerald-50 text-emerald-950"
-      : gate.verdict === "conditional"
-        ? "border-amber-300 bg-amber-50 text-amber-950"
-        : "border-red-300 bg-red-50 text-red-950";
+  const tone = gate.verdict === "go" ? "border-emerald-300 bg-emerald-50 text-emerald-950" : "border-amber-300 bg-amber-50 text-amber-950";
 
   return (
     <div className={`space-y-2 rounded-lg border p-3 ${tone}`}>
@@ -266,25 +219,26 @@ function CriticalGateBoard({
       <ul className="space-y-1 text-xs">
         {involved.map((area) => {
           const review = areaReviewFor(kickoff, area.id);
-          const stance = REVIEW_STANCE_OPTIONS.find((item) => item.id === review?.stance)?.label;
           return (
             <li key={area.id}>
               <span className="font-medium">{area.name}:</span>{" "}
               {review
-                ? `${stance ?? review.stance}${review.evidenceFileName ? ` · ${review.evidenceFileName}` : ""}`
-                : "sin validar"}
+                ? `comentario registrado${review.evidenceFileName ? ` · ${review.evidenceFileName}` : ""}`
+                : "sin comentario (no bloquea)"}
             </li>
           );
         })}
       </ul>
+      {kickoff.internalDate || kickoff.clientKickoffDueDate ? (
+        <p className="text-xs">
+          Consulta: {kickoff.internalDate || "—"} · Plazo kickoff cliente: {kickoff.clientKickoffDueDate || "—"}
+        </p>
+      ) : null}
       {gate.reasons.map((reason) => (
         <p key={reason} className="text-xs">
           {reason}
         </p>
       ))}
-      {gate.verdict !== "go" && gate.verdict !== "conditional" ? (
-        <p className="text-xs font-medium">No se habilita el kickoff final con el cliente.</p>
-      ) : null}
     </div>
   );
 }
@@ -311,7 +265,6 @@ function AreaCommentRow({
   users: TenantUser[];
   lessons: KnowledgeEntry[];
   onSave: (input: {
-    stance: KickoffReviewStance;
     comment: string;
     evidenceFileName?: string;
     evidenceFileType?: string;
@@ -320,7 +273,6 @@ function AreaCommentRow({
   }) => boolean;
 }) {
   const existing = areaReviewFor(kickoff, area.id);
-  const [stance, setStance] = useState<KickoffReviewStance>(existing?.stance ?? "ok");
   const [comment, setComment] = useState(existing?.comment ?? "");
   const [evidence, setEvidence] = useState({
     fileName: existing?.evidenceFileName ?? "",
@@ -332,7 +284,6 @@ function AreaCommentRow({
 
   function submit() {
     const ok = onSave({
-      stance,
       comment,
       evidenceFileName: evidence.fileName,
       evidenceFileType: evidence.fileType,
@@ -342,7 +293,7 @@ function AreaCommentRow({
     setError(
       ok
         ? null
-        : `Escribe las razones de ${area.name} (mínimo ${MIN_AREA_JUSTIFICATION} caracteres). El documento es opcional.`,
+        : `Escribe el comentario de ${area.name} (mínimo ${MIN_AREA_JUSTIFICATION} caracteres). El documento es opcional.`,
     );
   }
 
@@ -351,14 +302,12 @@ function AreaCommentRow({
       <p className="text-sm font-medium">
         {area.name}
         <span className="ml-2 text-xs font-normal text-slate-500">
-          {existing ? "Razones registradas" : locked ? "Sin validar" : "Pendiente"}
+          {existing ? "Comentario registrado" : locked ? "Sin comentario" : "Pendiente"}
         </span>
       </p>
       {existing && !canWrite ? (
         <div className="mt-1 space-y-1 text-sm text-slate-600">
-          <p>
-            {REVIEW_STANCE_OPTIONS.find((item) => item.id === existing.stance)?.label}: {existing.comment}
-          </p>
+          <p>{existing.comment}</p>
           {existing.evidenceFileName ? (
             <p className="text-xs text-slate-500">Documento (opcional): {existing.evidenceFileName}</p>
           ) : null}
@@ -377,9 +326,6 @@ function AreaCommentRow({
           <ul className="mt-1 space-y-1">
             {lessons.map((item) => (
               <li key={item.id} className="text-xs text-slate-600">
-                <span className="font-medium">
-                  {REVIEW_STANCE_OPTIONS.find((entry) => entry.id === item.stance)?.label}:
-                </span>{" "}
                 {item.comment.slice(0, 140)}
                 {item.comment.length > 140 ? "…" : ""}
                 {item.projectName ? ` · ${item.projectName}` : ""}
@@ -389,31 +335,20 @@ function AreaCommentRow({
         </div>
       ) : (
         <p className="mt-1 text-[11px] text-slate-500">
-          Aún no hay lecciones de esta área en otras obras. Esta validación alimenta Conocimiento.
+          Aún no hay lecciones de esta área en otras obras. Este comentario alimenta Conocimiento.
         </p>
       )}
       {canWrite ? (
         <div className="mt-2 space-y-2">
-          <div className="flex flex-col gap-2 text-xs">
-            {REVIEW_STANCE_OPTIONS.map((option) => (
-              <label key={option.id} className="flex items-start gap-2 rounded-md border border-slate-100 px-2 py-1.5">
-                <input type="radio" checked={stance === option.id} onChange={() => setStance(option.id)} className="mt-0.5" />
-                <span>
-                  <span className="font-medium">{option.label}</span>
-                  <span className="block text-slate-500">{option.hint}</span>
-                </span>
-              </label>
-            ))}
-          </div>
           <textarea
             rows={3}
             value={comment}
             onChange={(event) => setComment(event.target.value)}
-            placeholder={`¿Por qué ${area.name} justifica (o no) desarrollar esta obra? Incluye riesgos, capacidad y supuestos.`}
+            placeholder={`Comentario de ${area.name} sobre lo vendido: riesgos, capacidad, supuestos o ajustes sugeridos.`}
             className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
           />
           <p className="text-[11px] text-slate-500">
-            {comment.trim().length}/{MIN_AREA_JUSTIFICATION} caracteres mínimos.
+            {comment.trim().length}/{MIN_AREA_JUSTIFICATION} caracteres para registrar el comentario. No bloquea el avance.
           </p>
           <details className="rounded-md border border-slate-100 px-2 py-1.5">
             <summary className="cursor-pointer text-sm font-medium">Documento de respaldo (opcional)</summary>
@@ -432,7 +367,7 @@ function AreaCommentRow({
                 <span className="mt-1 block text-xs text-slate-600">Adjunto: {evidence.fileName}</span>
               ) : (
                 <span className="mt-1 block text-xs text-slate-500">
-                  Solo si hay un archivo que respalde las razones. El flujo avanza con el texto de las áreas.
+                  Solo si hay un archivo que respalde el comentario.
                 </span>
               )}
             </label>
@@ -443,17 +378,17 @@ function AreaCommentRow({
             onClick={submit}
             className="rounded-md bg-violet-800 px-3 py-1.5 text-xs text-white hover:bg-violet-900"
           >
-            {existing ? "Actualizar validación" : "Registrar validación del área"}
+            {existing ? "Actualizar comentario" : "Registrar comentario"}
           </button>
         </div>
       ) : !existing && !locked && !ready ? (
-        <p className="mt-1 text-xs text-slate-500">Guarda el extracto para habilitar la validación de esta área.</p>
+        <p className="mt-1 text-xs text-slate-500">Guarda el extracto para habilitar el comentario de esta área.</p>
       ) : !existing && !canWrite && !locked ? (
         <p className="mt-1 text-xs text-slate-600">
           {waitingOn ? (
             <>
-              Pendiente de {area.name}: {waitingOn.name || waitingOn.email} · {ROLE_LABELS[waitingOn.role]}. El
-              administrador no comenta a nombre de esta área.
+              Pendiente de {area.name}: {waitingOn.name || waitingOn.email} · {ROLE_LABELS[waitingOn.role]}. No
+              bloquea el avance.
             </>
           ) : (
             <>
@@ -461,143 +396,11 @@ function AreaCommentRow({
               <Link href="/users" className="font-medium underline">
                 Solicitar contraparte
               </Link>
-              .
+              . Tampoco bloquea el avance.
             </>
           )}
         </p>
       ) : null}
     </li>
-  );
-}
-
-function PmCloseForm({
-  projectId,
-  kickoff,
-  projectStart,
-  projectFinish,
-  onConfirm,
-  userId,
-  requirePlan,
-  canClose,
-  blockReason,
-}: {
-  projectId: string;
-  kickoff: ProjectKickoff;
-  projectStart: string;
-  projectFinish: string;
-  onConfirm: (projectId: string, patch?: Partial<ProjectKickoff>, userId?: string) => boolean;
-  userId: string;
-  requirePlan: boolean;
-  canClose: boolean;
-  blockReason?: string;
-}) {
-  const [fit, setFit] = useState<CommercialFit>(kickoff.pmFit || (requirePlan ? "adjust" : "within"));
-  const [judgment, setJudgment] = useState(kickoff.pmJudgment || "");
-  const [plan, setPlan] = useState(kickoff.pmFulfillmentPlan || "");
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function submit() {
-    if (!canClose) {
-      setError(blockReason || "El criterio crítico de las áreas aún no permite cerrar.");
-      return;
-    }
-    if (!acknowledged) {
-      setError("Confirma que revisaste el criterio crítico de todas las áreas.");
-      return;
-    }
-    if (!judgment.trim()) {
-      setError("Escribe el fundamento del gestor con el conocimiento de las áreas.");
-      return;
-    }
-    if ((requirePlan || fit !== "within") && !plan.trim()) {
-      setError("Si hay condiciones de las áreas, el gestor debe registrar cómo se harán cumplir.");
-      return;
-    }
-    const payload: Partial<ProjectKickoff> = {
-      ...kickoff,
-      pmFit: fit,
-      pmJudgment: judgment.trim(),
-      pmFulfillmentPlan: fit === "within" && !requirePlan ? "" : plan.trim(),
-      plannedStartDate: kickoff.plannedStartDate || projectStart,
-      plannedFinishDate: kickoff.plannedFinishDate || projectFinish,
-      finalProposalToClient:
-        kickoff.finalProposalToClient.trim() ||
-        draftFinalProposal({
-          ...kickoff,
-          pmFit: fit,
-          pmJudgment: judgment.trim(),
-        }),
-      pmValidatedBy: userId,
-    };
-    const ok = onConfirm(projectId, payload, userId);
-    setError(ok ? null : "El criterio crítico todavía bloquea el cierre interno.");
-  }
-
-  return (
-    <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50/80 p-3">
-      <h4 className="font-semibold">Cierre del gestor</h4>
-      <p className="text-xs text-slate-600">
-        El gestor no sustituye a las áreas: sintetiza su conocimiento y solo cierra si el criterio crítico lo
-        permite.
-      </p>
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">¿Se puede cumplir lo vendido?</legend>
-        {COMMERCIAL_FIT_OPTIONS.map((option) => (
-          <label key={option.id} className="flex items-start gap-2 rounded-lg bg-white px-3 py-2 text-sm">
-            <input
-              type="radio"
-              name={`pmFit-${projectId}`}
-              checked={fit === option.id}
-              onChange={() => setFit(option.id)}
-              className="mt-1"
-            />
-            <span>
-              <span className="font-medium">{option.label}</span>
-              <span className="block text-xs text-slate-600">{option.hint}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium">Fundamento con el criterio de las áreas</span>
-        <textarea
-          rows={2}
-          value={judgment}
-          onChange={(event) => setJudgment(event.target.value)}
-          placeholder="Cómo el conocimiento conjunto de las áreas justifica (o condiciona) desarrollar la obra."
-          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2"
-        />
-      </label>
-      {requirePlan || fit !== "within" ? (
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium">Cómo se incorporan las condiciones de las áreas</span>
-          <textarea
-            rows={2}
-            value={plan}
-            onChange={(event) => setPlan(event.target.value)}
-            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2"
-          />
-        </label>
-      ) : null}
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={acknowledged}
-          onChange={(event) => setAcknowledged(event.target.checked)}
-          className="mt-1"
-        />
-        <span>Revisé las razones escritas de todas las áreas involucradas.</span>
-      </label>
-      {error ? <p className="text-xs text-red-700">{error}</p> : null}
-      <button
-        type="button"
-        onClick={submit}
-        disabled={!canClose}
-        className="rounded-md bg-amber-800 px-3 py-2 text-sm text-white hover:bg-amber-900 disabled:opacity-40"
-      >
-        Confirmar como gestor de proyectos
-      </button>
-    </div>
   );
 }

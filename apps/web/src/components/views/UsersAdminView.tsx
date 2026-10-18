@@ -7,17 +7,31 @@ import { HandoverConfirm } from "@/components/auth/HandoverConfirm";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
 import { isFirstOfRole } from "@/lib/handover";
+import { PASSWORD_MIN_LENGTH } from "@/lib/identity";
 import type { TenantUser, UserRole } from "@/lib/types";
 
 export function UsersAdminView() {
-  const { users, areas, profiles, assignments, addUser, removeUser, assignProfile, unassignProfile } = useOrg();
+  const {
+    users,
+    areas,
+    profiles,
+    assignments,
+    addUser,
+    removeUser,
+    assignProfile,
+    unassignProfile,
+    hasPasswordLogin,
+    setPersonPassword,
+  } = useOrg();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<TenantUser | null>(null);
+  const [credTarget, setCredTarget] = useState<TenantUser | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, setPending] = useState<{
     kind: "add" | "assign";
     name: string;
     email?: string;
+    password?: string;
     userId?: string;
     profileId: string;
     role: UserRole;
@@ -25,10 +39,16 @@ export function UsersAdminView() {
   const [handoverOk, setHandoverOk] = useState(false);
   const assignableProfiles = profiles.filter((item) => item.role !== "owner");
 
-  function applyAdd(name: string, email: string, profileId: string) {
-    addUser({ name, email, profileId });
+  function applyAdd(name: string, email: string, profileId: string, password: string) {
+    const result = addUser({ name, email, profileId, password });
+    if (!result.ok) {
+      setNotice(result.message);
+      return;
+    }
     const profile = profiles.find((item) => item.id === profileId);
-    setNotice(`${name} entra como ${profile?.name ?? ROLE_LABELS[profile?.role ?? "viewer"]}.`);
+    setNotice(
+      `${name} queda como ${profile?.name ?? ROLE_LABELS[profile?.role ?? "viewer"]}. Puede entrar y salir con ${email.trim().toLowerCase()} y la clave definida (Salir → Iniciar sesión).`,
+    );
     setOpen(false);
   }
 
@@ -50,8 +70,9 @@ export function UsersAdminView() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Quién entra a la plataforma</p>
           <h1 className="text-2xl font-semibold">Personas</h1>
           <p className="text-sm text-slate-600">
-            Invita con nombre y puesto. Al entregar un puesto por primera vez, dejas de editar esa
-            parte y solo la miras.
+            Cada colaborador se registra con correo y clave, igual que el administrador. Con esas
+            credenciales entra y sale de OpenEVM. Al entregar un puesto por primera vez, dejas de
+            editar esa parte y solo la miras.
           </p>
         </div>
         <button
@@ -64,7 +85,9 @@ export function UsersAdminView() {
       </div>
 
       <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
-        Suma solo a colaboradores que ya conozcas. El correo debe ser corporativo.
+        El administrador es quien arma la empresa. El resto (por ejemplo Alejandro) también recibe
+        usuario (su correo) y clave al registrarlo aquí. Luego prueba Salir e Iniciar sesión con esas
+        credenciales; no hace falta repetir el Setup 0.
       </p>
 
       {assignableProfiles.length ? null : (
@@ -104,8 +127,8 @@ export function UsersAdminView() {
               disabled={!handoverOk}
               className="rounded-md bg-[var(--brand)] px-3 py-2 text-sm text-white disabled:opacity-40"
               onClick={() => {
-                if (pending.kind === "add" && pending.email) {
-                  applyAdd(pending.name, pending.email, pending.profileId);
+                if (pending.kind === "add" && pending.email && pending.password) {
+                  applyAdd(pending.name, pending.email, pending.profileId, pending.password);
                 }
                 if (pending.kind === "assign" && pending.userId) {
                   applyAssign(pending.userId, pending.name, pending.profileId);
@@ -142,6 +165,16 @@ export function UsersAdminView() {
             render: (row) =>
               String(assignments.filter((item) => item.userId === row.id).length),
           },
+          {
+            key: "login",
+            header: "Acceso",
+            render: (row) =>
+              hasPasswordLogin(row.email)
+                ? "Correo y clave"
+                : row.role === "owner"
+                  ? "Clave del alta"
+                  : "Sin clave",
+          },
         ]}
         data={users}
         rowKey={(row) => row.id}
@@ -159,6 +192,17 @@ export function UsersAdminView() {
                 return;
               }
               setTarget(row);
+            },
+          },
+          {
+            label: "Clave de acceso",
+            variant: "key",
+            onClick: (row) => {
+              if (row.role === "owner") {
+                setNotice("La clave del administrador se define en el alta o se cambia con Olvidé la clave.");
+                return;
+              }
+              setCredTarget(row);
             },
           },
           {
@@ -199,10 +243,33 @@ export function UsersAdminView() {
         open={open}
         onClose={() => setOpen(false)}
         title="Nueva persona"
-        submitLabel="Invitar"
+        submitLabel="Registrar y dar clave"
         fields={[
-          { name: "name", label: "Nombre", type: "text", required: true, placeholder: "Nombre de colaborador" },
-          { name: "email", label: "Correo", type: "text", required: true, placeholder: "colaborador@openevm.cl" },
+          { name: "name", label: "Nombre", type: "text", required: true, placeholder: "Alejandro Contreras" },
+          {
+            name: "email",
+            label: "Correo (usuario de entrada)",
+            type: "text",
+            required: true,
+            placeholder: "alejandro@openevm.cl",
+          },
+          {
+            name: "password",
+            label: "Clave de acceso",
+            type: "password",
+            required: true,
+            minLength: PASSWORD_MIN_LENGTH,
+            autoComplete: "new-password",
+            placeholder: `Mínimo ${PASSWORD_MIN_LENGTH} caracteres`,
+          },
+          {
+            name: "passwordConfirm",
+            label: "Repite la clave",
+            type: "password",
+            required: true,
+            minLength: PASSWORD_MIN_LENGTH,
+            autoComplete: "new-password",
+          },
           {
             name: "profileId",
             label: "Perfil",
@@ -220,11 +287,16 @@ export function UsersAdminView() {
         onSubmit={(values) => {
           const profile = profiles.find((item) => item.id === values.profileId);
           if (!profile) return;
+          if (values.password !== values.passwordConfirm) {
+            setNotice("La clave y su confirmación no coinciden.");
+            return;
+          }
           if (isFirstOfRole(users, profile.role)) {
             setPending({
               kind: "add",
               name: values.name,
               email: values.email,
+              password: values.password,
               profileId: values.profileId,
               role: profile.role,
             });
@@ -232,7 +304,44 @@ export function UsersAdminView() {
             setHandoverOk(false);
             return;
           }
-          applyAdd(values.name, values.email, values.profileId);
+          applyAdd(values.name, values.email, values.profileId, values.password);
+        }}
+      />
+
+      <ModalForm
+        key={credTarget?.id ?? "password"}
+        open={Boolean(credTarget)}
+        onClose={() => setCredTarget(null)}
+        title={credTarget ? `Clave de acceso de ${credTarget.name}` : "Clave de acceso"}
+        submitLabel={credTarget && hasPasswordLogin(credTarget.email) ? "Cambiar clave" : "Definir clave"}
+        fields={[
+          {
+            name: "password",
+            label: "Clave para entrar a OpenEVM",
+            type: "password",
+            required: true,
+            minLength: PASSWORD_MIN_LENGTH,
+            autoComplete: "new-password",
+            placeholder: `Mínimo ${PASSWORD_MIN_LENGTH} caracteres`,
+          },
+          {
+            name: "passwordConfirm",
+            label: "Repite la clave",
+            type: "password",
+            required: true,
+            minLength: PASSWORD_MIN_LENGTH,
+            autoComplete: "new-password",
+          },
+        ]}
+        onSubmit={(values) => {
+          if (!credTarget) return;
+          if (values.password !== values.passwordConfirm) {
+            setNotice("La clave y su confirmación no coinciden.");
+            return;
+          }
+          const result = setPersonPassword(credTarget.id, values.password);
+          setNotice(result.message);
+          if (result.ok) setCredTarget(null);
         }}
       />
 

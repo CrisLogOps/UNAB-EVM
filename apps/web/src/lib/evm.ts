@@ -128,6 +128,25 @@ export function formatClp(value: number): string {
   }).format(value);
 }
 
+/** Acepta 150000000, 150.000.000 o $150.000.000. */
+export function parseClpInput(value: string): number {
+  const clean = value.replace(/[^\d]/g, "");
+  if (!clean) return 0;
+  return Number(clean) || 0;
+}
+
+/** BAC aprobado, o el monto cargado/contrapropuesto si aún no hay visto bueno. */
+export function registeredBudgetClp(project: {
+  bac: number;
+  proposedBac: number | null;
+  counterBac: number | null;
+}): number {
+  if (project.bac > 0) return project.bac;
+  if ((project.counterBac ?? 0) > 0) return project.counterBac ?? 0;
+  if ((project.proposedBac ?? 0) > 0) return project.proposedBac ?? 0;
+  return 0;
+}
+
 export function formatUf(clp: number, ufClp: number): string {
   if (!ufClp) return "—";
   return `${(clp / ufClp).toFixed(2)} UF`;

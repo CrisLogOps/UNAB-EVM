@@ -3,22 +3,21 @@
 import { useMemo, useState } from "react";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
+import { formatClp, parseClpInput, registeredBudgetClp } from "@/lib/evm";
 import {
-  COMMERCIAL_FIT_OPTIONS,
+  INDIVIDUAL_KICKOFF_QUESTIONS,
+  addCalendarDays,
+  canEditPmNotes,
+  canEditSoldExtract,
   commercialDeliveryReady,
   defaultWorkingAgreement,
   draftFinalProposal,
   emptyProposal,
-  fitLabel,
-  areaReviewsComplete,
-  internalReadyForClient,
-  pmReviewReady,
-  proposalReady,
-  coversKickoffRole,
   evaluateInternalGate,
 } from "@/lib/kickoff";
 import { KickoffAreaPanel } from "@/components/onboarding/KickoffAreaPanel";
-import type { Client, CommercialFit, KickoffProposal, OrgArea, Project, ProjectKickoff } from "@/lib/types";
+import { IndividualInternalKickoff } from "@/components/onboarding/IndividualInternalKickoff";
+import type { Client, KickoffProposal, OrgArea, Project, ProjectKickoff } from "@/lib/types";
 
 type Step = "client" | "project" | "internal" | "clientKickoff";
 
@@ -38,13 +37,17 @@ export function ClientKickoffAssistant({
     users,
     addClient,
     addClientProject,
+    updateClientProject,
     saveKickoff,
     stampCommercialKickoff,
     confirmInternalKickoff,
+    openClientKickoff,
     confirmClientKickoff,
+    activateProject,
     kickoffFor,
     sessionUser,
     ownerManagesAll,
+    isIndividualMode,
   } = useOrg();
 
   const resumed = resumeProjectId ? projects.find((item) => item.id === resumeProjectId) : undefined;
@@ -52,9 +55,11 @@ export function ClientKickoffAssistant({
   const resumedKickoff = resumeProjectId ? kickoffFor(resumeProjectId) : undefined;
 
   const initialStep: Step = resumed
-    ? resumed.kickoffPhase === "internal_done" || resumed.kickoffPhase === "client_done"
-      ? "clientKickoff"
-      : "internal"
+    ? registeredBudgetClp(resumed) <= 0
+      ? "project"
+      : resumed.kickoffPhase === "internal_done" || resumed.kickoffPhase === "client_done"
+        ? "clientKickoff"
+        : "internal"
     : "client";
 
   const [step, setStep] = useState<Step>(initialStep);
@@ -69,6 +74,10 @@ export function ClientKickoffAssistant({
   const [projectCode, setProjectCode] = useState(resumed?.code ?? "");
   const [startDate, setStartDate] = useState(resumed?.startDate ?? "");
   const [finishDate, setFinishDate] = useState(resumed?.finishDate ?? "");
+  const [initialBudget, setInitialBudget] = useState(() => {
+    const amount = resumed ? registeredBudgetClp(resumed) : 0;
+    return amount > 0 ? String(amount) : "";
+  });
   const [draft, setDraft] = useState<Partial<ProjectKickoff>>(() => seedDraft(resumedKickoff, resumed, areas));
 
   const currentProject: Project | undefined = projects.find((item) => item.id === projectId);
@@ -81,14 +90,11 @@ export function ClientKickoffAssistant({
     proposal: draft.proposal?.fileName || draft.proposal?.body ? { ...emptyProposal(), ...storedKickoff?.proposal, ...draft.proposal } : storedKickoff?.proposal ?? emptyProposal(),
   } as ProjectKickoff;
   const commercialDone = Boolean(merged.commercialDeliveredAt);
-  const areasDone = areaReviewsComplete(merged, areas);
   const pmDone = Boolean(merged.pmValidatedAt);
-  const bothDone = internalReadyForClient(merged, areas);
-  const gate = evaluateInternalGate(merged, areas);
-  const canStampCommercial = coversKickoffRole(sessionUser, "commercial", users, ownerManagesAll);
-  const canClosePm = coversKickoffRole(sessionUser, "pmo", users, ownerManagesAll);
-  const pmCounterpart = users.find((item) => item.active && item.profileId && item.role === "pmo");
-  const commercialCounterpart = users.find((item) => item.active && item.profileId && item.role === "commercial");
+  const clientLocked = Boolean(merged.clientConfirmedAt);
+  const gate = evaluateInternalGate(merged, areas, isIndividualMode);
+  const canStampCommercial = canEditSoldExtract(sessionUser, users, ownerManagesAll);
+  const canEditPm = canEditPmNotes(sessionUser, users, ownerManagesAll);
 
   const steps = useMemo(
     () => [
@@ -156,27 +162,56 @@ export function ClientKickoffAssistant({
     setStep("project");
   }
 
-  function submitProject() {
+  function ensureProject() {
+    if (!clientId) {
+      setError("Completa el cliente antes de crear el proyecto.");
+      return "";
+    }
     if (!projectName.trim() || !projectCode.trim() || !startDate || !finishDate) {
       setError("Completa nombre, código, inicio y término del proyecto.");
-      return;
+      return "";
     }
     if (finishDate < startDate) {
       setError("El término no puede ser anterior al inicio.");
-      return;
+      return "";
     }
-    const id =
-      projectId ||
-      addClientProject(clientId, {
+    const amount = parseClpInput(initialBudget) || (currentProject ? registeredBudgetClp(currentProject) : 0);
+    if (!(amount > 0)) {
+      setError("Registra el presupuesto inicial en la fase Proyecto. Sin ese monto no se arma el cronograma.");
+      setStep("project");
+      return "";
+    }
+    if (projectId) {
+      const ok = updateClientProject(projectId, {
         name: projectName,
         code: projectCode,
         startDate,
         finishDate,
+        proposedBac: amount,
       });
+      if (!ok) {
+        setError("No se pudo actualizar el proyecto.");
+        return "";
+      }
+      return projectId;
+    }
+    const id = addClientProject(clientId, {
+      name: projectName,
+      code: projectCode,
+      startDate,
+      finishDate,
+      proposedBac: amount,
+    });
     if (!id) {
       setError("No se pudo crear el proyecto. Revisa el cliente.");
-      return;
+      return "";
     }
+    return id;
+  }
+
+  function submitProject() {
+    const id = ensureProject();
+    if (!id) return;
     setProjectId(id);
     patchDraft({
       soldStartDate: draft.soldStartDate || startDate,
@@ -196,14 +231,26 @@ export function ClientKickoffAssistant({
     setStep("internal");
   }
 
+  function persistConsultation(next: Partial<ProjectKickoff>) {
+    const patch = { ...next };
+    const consultation = patch.internalDate ?? draft.internalDate ?? merged.internalDate;
+    const due = patch.clientKickoffDueDate ?? draft.clientKickoffDueDate ?? merged.clientKickoffDueDate;
+    if (consultation && !due) {
+      patch.clientKickoffDueDate = addCalendarDays(consultation, 7);
+    }
+    patchDraft(patch);
+    if (projectId) saveKickoff(projectId, patch);
+  }
+
+  function persistPmNotes(next: Partial<ProjectKickoff>) {
+    patchDraft(next);
+    if (projectId) saveKickoff(projectId, next);
+  }
+
   function deliverCommercial() {
     if (!projectId) return;
     if (!canStampCommercial) {
-      setError(
-        commercialCounterpart
-          ? `La propuesta la registra ${commercialCounterpart.name || commercialCounterpart.email} (Comercial). El administrador no la firma a nombre de esa área.`
-          : "La propuesta la registra Comercial.",
-      );
+      setError("El extracto lo registran el administrador o el gestor de proyectos. No hace falta un área comercial.");
       return;
     }
     const payload = { ...kickoffFor(projectId), ...draft } as ProjectKickoff;
@@ -223,48 +270,40 @@ export function ClientKickoffAssistant({
     setError(null);
   }
 
-  function confirmPm() {
+  function confirmIndividualInternal() {
     if (!projectId) return;
-    if (!canClosePm) {
-      setError(
-        pmCounterpart
-          ? `El cierre interno lo confirma ${pmCounterpart.name || pmCounterpart.email} (gestor). El administrador consulta y no confirma a su nombre.`
-          : "El cierre interno lo confirma el gestor de proyectos.",
-      );
-      return;
-    }
     const stored = kickoffFor(projectId);
     const payload = {
       ...stored,
       ...draft,
       areaReviews: stored?.areaReviews ?? [],
       proposal: stored?.proposal ?? draft.proposal,
-      finalProposalToClient: draft.finalProposalToClient?.trim() || draftFinalProposal({ ...stored, ...draft } as ProjectKickoff),
+      internalEvalAnswers: {
+        ...(stored?.internalEvalAnswers ?? {}),
+        ...(draft.internalEvalAnswers ?? {}),
+      },
+      internalNotes: draft.internalNotes ?? stored?.internalNotes ?? "",
+      finalProposalToClient:
+        draft.finalProposalToClient?.trim() ||
+        draft.proposal?.body?.trim() ||
+        draft.commercialCommitment?.trim() ||
+        "",
     } as ProjectKickoff;
-    if (!proposalReady(payload.proposal)) {
-      setError("Escribe el extracto de la propuesta para que las áreas puedan comentar.");
-      return;
-    }
-    if (!areasDone) {
-      setError("Todas las áreas involucradas deben dejar por escrito las razones que justifican el proyecto.");
-      return;
-    }
-    if (!gate.canCloseInternal) {
-      setError(gate.reasons[0] || "El criterio crítico de las áreas aún no permite cerrar el kickoff interno.");
-      return;
-    }
-    if (!pmReviewReady(payload)) {
-      setError(
-        "El gestor registra el juicio experto y la propuesta final al cliente, con los comentarios de las áreas.",
-      );
-      return;
+    if (!commercialDone) {
+      const stamped = stampCommercialKickoff(projectId, payload, sessionUser.id);
+      if (!stamped) {
+        setError("Escribe el alcance de lo vendido. Las fechas del proyecto alcanzan para registrarlo.");
+        return;
+      }
     }
     const ok = confirmInternalKickoff(projectId, payload, sessionUser.id);
     if (!ok) {
-      setError("Falta la validación: propuesta, comentarios de todas las áreas y cierre del gestor.");
+      setError("Completá la propuesta, las notas para el cliente y las preguntas PMBOK.");
       return;
     }
     patchDraft({
+      commercialDeliveredBy: sessionUser.id,
+      commercialDeliveredAt: new Date().toISOString(),
       pmValidatedBy: sessionUser.id,
       pmValidatedAt: new Date().toISOString(),
       internalConfirmedAt: new Date().toISOString(),
@@ -276,9 +315,29 @@ export function ClientKickoffAssistant({
     if (!gate.canMeetClient) {
       setError(
         gate.reasons[0] ||
-          "El kickoff interno exige el criterio crítico de todas las áreas. Mientras haya pendientes o un no viable, no se abre el kickoff con el cliente.",
+          (isIndividualMode
+            ? "Cerrá el kickoff interno (propuesta, notas y criterio PMBOK) antes de ir con el cliente."
+            : "Registra el extracto, la fecha de consulta y el plazo del kickoff con el cliente para continuar."),
       );
       return;
+    }
+    if (!isIndividualMode && projectId) {
+      const payload = {
+        ...draft,
+        finalProposalToClient: draft.finalProposalToClient?.trim() || draftFinalProposal(merged),
+        clientDate: draft.clientDate || draft.clientKickoffDueDate,
+      };
+      const opened = openClientKickoff(projectId, payload, sessionUser.id);
+      if (!opened) {
+        setError("No se pudo abrir el kickoff con el cliente. Revisa el extracto y las fechas de consulta.");
+        return;
+      }
+      patchDraft({
+        commercialDeliveredBy: merged.commercialDeliveredBy || sessionUser.id,
+        commercialDeliveredAt: merged.commercialDeliveredAt || new Date().toISOString(),
+        clientDate: payload.clientDate,
+        finalProposalToClient: payload.finalProposalToClient,
+      });
     }
     setError(null);
     setStep("clientKickoff");
@@ -289,10 +348,27 @@ export function ClientKickoffAssistant({
     saveKickoff(projectId, draft);
     const ok = confirmClientKickoff(projectId, draft);
     if (!ok) {
-      setError("Registra los acuerdos con el cliente para dar inicio al proyecto y al cronograma.");
+      setError("Registra los acuerdos con el cliente para dejar el kickoff cerrado. Si la obra ya está en curso, puedes saltar al cronograma.");
       return;
     }
     onStarted(projectId);
+  }
+
+  function skipKickoffToSchedule() {
+    if (step === "client") {
+      setError("Registra el cliente y el proyecto, con su presupuesto inicial. El kickoff se puede saltar en el paso siguiente.");
+      return;
+    }
+    const id = ensureProject();
+    if (!id) return;
+    setProjectId(id);
+    const ok = activateProject(id);
+    if (!ok) {
+      setError("No se pudo abrir el cronograma.");
+      return;
+    }
+    setError(null);
+    onStarted(id);
   }
 
   return (
@@ -353,7 +429,8 @@ export function ClientKickoffAssistant({
           <div>
             <h2 className="text-lg font-semibold">Proyecto del cliente</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Identificación de la obra. Las fechas contractuales y legales se cierran en el kickoff interno.
+              Identificación de la obra y presupuesto inicial. El cronograma de ejemplo se arma con ese monto.
+              El kickoff interno y el del cliente son opcionales: si la obra ya está en curso, puedes saltarlos.
             </p>
           </div>
           <label className="block text-sm">
@@ -395,27 +472,59 @@ export function ClientKickoffAssistant({
               />
             </label>
           </div>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Presupuesto inicial (CLP)</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={initialBudget}
+              onChange={(event) => setInitialBudget(event.target.value)}
+              placeholder="Ej. 450000000"
+              className="w-full rounded-md border border-slate-200 px-3 py-2"
+            />
+            <span className="mt-1 block text-xs text-slate-500">
+              {parseClpInput(initialBudget) > 0
+                ? `Queda registrado ${formatClp(parseClpInput(initialBudget))} para armar el cronograma. Finanzas puede formalizarlo después.`
+                : "Obligatorio para ver el cronograma si saltas el kickoff. Es el BAC inicial de la obra, no la clave SII."}
+            </span>
+          </label>
         </div>
       ) : null}
 
-      {step === "internal" ? (
+      {step === "internal" && isIndividualMode ? (
+        <IndividualInternalKickoff
+          draft={draft}
+          commercialDone={commercialDone}
+          internalDone={pmDone}
+          onPatch={(next) => {
+            patchDraft(next);
+            if (projectId) saveKickoff(projectId, next);
+          }}
+          onProposal={patchProposal}
+          onProposalFile={onProposalFile}
+          onRegisterProposal={deliverCommercial}
+          onConfirmInternal={confirmIndividualInternal}
+        />
+      ) : null}
+
+      {step === "internal" && !isIndividualMode ? (
         <div className="space-y-4">
           <div>
             <h2 className="text-lg font-semibold">Kickoff interno</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Si eres el único trabajador, cierras el levantamiento. Si hay más integrantes, el administrador
-              deja cliente y obra y cada área de la organización registra su contraparte.
+              El administrador o el gestor registran el extracto. No hace falta un área comercial. Las demás áreas
+              pueden comentar. Este paso es opcional si estás migrando una obra en curso.
             </p>
           </div>
 
           <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/60 p-3">
-            <h3 className="font-semibold">1. Propuesta de Comercial</h3>
+            <h3 className="font-semibold">1. Extracto de lo vendido</h3>
             <label className="block text-sm">
               <span className="mb-1 block font-medium">Extracto que comentan las áreas</span>
               <textarea
                 rows={4}
                 value={draft.proposal?.body ?? ""}
-                disabled={commercialDone || !canStampCommercial}
+                disabled={clientLocked || !canStampCommercial}
                 onChange={(event) => patchProposal({ body: event.target.value, title: draft.proposal?.title || "Propuesta inicial" })}
                 placeholder="Alcance, plazos, supuestos y exclusiones. Con este texto ya se puede comentar."
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 disabled:bg-slate-50"
@@ -426,7 +535,7 @@ export function ClientKickoffAssistant({
               <input
                 type="file"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,application/pdf"
-                disabled={commercialDone || !canStampCommercial}
+                disabled={clientLocked || !canStampCommercial}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) onProposalFile(file);
@@ -437,24 +546,24 @@ export function ClientKickoffAssistant({
                 <span className="mt-1 block text-xs text-slate-600">Adjunto: {draft.proposal.fileName}</span>
               ) : null}
             </label>
-            {!commercialDone ? (
-              canStampCommercial ? (
+            {canStampCommercial && !clientLocked ? (
               <button
                 type="button"
                 onClick={deliverCommercial}
                 className="rounded-md bg-sky-800 px-3 py-2 text-sm text-white hover:bg-sky-900"
               >
-                Registrar propuesta
+                {commercialDone ? "Actualizar extracto" : "Registrar propuesta"}
               </button>
-              ) : (
-                <p className="text-xs text-slate-600">
-                  Solicita a Comercial
-                  {commercialCounterpart ? ` (${commercialCounterpart.name || commercialCounterpart.email})` : ""}{" "}
-                  que registre el extracto. El administrador ve el dato y no lo firma a nombre de esa área.
-                </p>
-              )
-            ) : (
-              <p className="text-xs font-medium text-emerald-800">Propuesta registrada · {personName(merged.commercialDeliveredBy)}</p>
+            ) : null}
+            {commercialDone ? (
+              <p className="text-xs font-medium text-emerald-800">
+                Extracto registrado · {personName(merged.commercialDeliveredBy)}. Se puede seguir editando hasta el
+                kickoff con el cliente.
+              </p>
+            ) : canStampCommercial ? null : (
+              <p className="text-xs text-slate-600">
+                El extracto lo registran el administrador o el gestor de proyectos. No hace falta un área comercial.
+              </p>
             )}
           </section>
 
@@ -504,103 +613,82 @@ export function ClientKickoffAssistant({
           </details>
 
           <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
-            <h3 className="font-semibold">3. Cierre del gestor</h3>
+            <h3 className="font-semibold">3. Consulta del gestor</h3>
             <p className="text-xs text-slate-600">
-              El gestor sintetiza las razones escritas de las áreas. Si faltan comentarios o hay un no viable,
-              no se puede confirmar ni pasar al cliente.
+              El gestor comenta y edita, pero no cierra el flujo. Con extracto, fecha de consulta y plazo al cliente
+              se continúa al kickoff con el cliente.
             </p>
-            {gate.verdict === "nogo" || gate.verdict === "incomplete" ? (
-              <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-950">
-                {gate.reasons[0]}
-              </p>
-            ) : null}
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">¿Se puede cumplir lo vendido?</legend>
-              {COMMERCIAL_FIT_OPTIONS.map((option) => (
-                <label key={option.id} className="flex items-start gap-2 rounded-lg bg-white px-3 py-2 text-sm">
-                  <input
-                    type="radio"
-                    name="pmFit"
-                    checked={draft.pmFit === option.id}
-                    disabled={!canClosePm || pmDone}
-                    onChange={() => patchDraft({ pmFit: option.id as CommercialFit })}
-                    className="mt-1"
-                  />
-                  <span>
-                    <span className="font-medium">{option.label}</span>
-                    <span className="block text-xs text-slate-600">{option.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium">Fundamento con el criterio de las áreas</span>
-              <textarea
-                rows={2}
-                value={draft.pmJudgment ?? ""}
-                disabled={!canClosePm || pmDone}
-                onChange={(event) => patchDraft({ pmJudgment: event.target.value })}
-                placeholder="Cómo el conocimiento conjunto de las áreas justifica desarrollar la obra."
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2"
-              />
-            </label>
-            {gate.verdict === "conditional" || (draft.pmFit && draft.pmFit !== "within") ? (
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm">
-                <span className="mb-1 block font-medium">Cómo se incorporan las condiciones de las áreas</span>
-                <textarea
-                  rows={2}
-                  value={draft.pmFulfillmentPlan ?? ""}
-                  disabled={!canClosePm || pmDone}
-                  onChange={(event) => patchDraft({ pmFulfillmentPlan: event.target.value })}
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2"
+                <span className="mb-1 block font-medium">Fecha de consulta</span>
+                <input
+                  type="date"
+                  value={draft.internalDate ?? ""}
+                  disabled={!canEditPm || clientLocked}
+                  onChange={(event) => persistConsultation({ internalDate: event.target.value })}
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 disabled:bg-slate-50"
                 />
               </label>
-            ) : null}
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Plazo del kickoff con el cliente</span>
+                <input
+                  type="date"
+                  value={draft.clientKickoffDueDate ?? ""}
+                  min={draft.internalDate}
+                  disabled={!canEditPm || clientLocked}
+                  onChange={(event) => persistConsultation({ clientKickoffDueDate: event.target.value })}
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 disabled:bg-slate-50"
+                />
+              </label>
+            </div>
             <label className="block text-sm">
-              <span className="mb-1 block font-medium">Propuesta final al cliente</span>
+              <span className="mb-1 block font-medium">Comentarios del gestor</span>
+              <textarea
+                rows={3}
+                value={draft.internalNotes ?? ""}
+                disabled={!canEditPm || clientLocked}
+                onChange={(event) => persistPmNotes({ internalNotes: event.target.value })}
+                placeholder="Qué se compromete según los comentarios de las áreas. No cierra el flujo."
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 disabled:bg-slate-50"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium">Registro de lo comprometido para el cliente</span>
               <textarea
                 rows={3}
                 value={draft.finalProposalToClient ?? ""}
-                disabled={!canClosePm || pmDone}
-                onChange={(event) => patchDraft({ finalProposalToClient: event.target.value })}
+                disabled={!canEditPm || clientLocked}
+                onChange={(event) => persistPmNotes({ finalProposalToClient: event.target.value })}
                 onFocus={() => {
                   if (!draft.finalProposalToClient?.trim()) {
-                    patchDraft({ finalProposalToClient: draftFinalProposal(merged) });
+                    persistPmNotes({ finalProposalToClient: draftFinalProposal(merged) });
                   }
                 }}
-                placeholder="Se arma con lo vendido y el criterio de las áreas. Edítala antes de cerrar."
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2"
+                placeholder="Se arma con el extracto y los comentarios de las áreas. Se puede editar."
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 disabled:bg-slate-50"
               />
             </label>
-            {!pmDone ? (
-              canClosePm ? (
-              <button
-                type="button"
-                disabled={!gate.canCloseInternal || !proposalReady(merged.proposal)}
-                onClick={confirmPm}
-                className="rounded-md bg-amber-800 px-3 py-2 text-sm text-white hover:bg-amber-900 disabled:opacity-40"
-              >
-                Confirmar como gestor de proyectos
-              </button>
-              ) : (
-                <p className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-amber-950">
-                  Espera al gestor
-                  {pmCounterpart ? ` (${pmCounterpart.name || pmCounterpart.email})` : ""} para el juicio y el
-                  cierre interno. El administrador consulta las razones de las áreas y no confirma a su nombre.
-                </p>
-              )
+            {canEditPm ? (
+              <p className="text-xs text-amber-950">
+                Los comentarios del gestor quedan en el expediente. No hay que confirmar para continuar.
+              </p>
             ) : (
-              <p className="text-xs font-medium text-emerald-800">Gestor confirmó · {personName(merged.pmValidatedBy)}</p>
+              <p className="text-xs text-slate-600">
+                El gestor o el administrador registran la fecha de consulta y los comentarios.
+              </p>
             )}
           </section>
 
-          {bothDone ? (
+          {gate.canMeetClient ? (
             <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
-              Criterio crítico aprobado. Puedes pasar al kickoff con el cliente.
+              Extracto y plazo listos. Puedes continuar al kickoff con el cliente o saltar al cronograma si la
+              obra ya está en curso.
             </p>
           ) : (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-950">
-              {gate.reasons[0] || "La validación interna aún no permite el kickoff con el cliente."}
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              {(gate.reasons.find((item) => !item.startsWith("Comentarios aún")) ||
+                "Para el kickoff interno registra el extracto, la fecha de consulta y el plazo con el cliente.") +
+                " Si la obra ya está en desarrollo, puedes saltarlo e ir al cronograma."}
             </p>
           )}
         </div>
@@ -611,20 +699,46 @@ export function ClientKickoffAssistant({
           <div>
             <h2 className="text-lg font-semibold">Kickoff con el cliente</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Cierra el acuerdo con el cliente. Al confirmar, el proyecto queda iniciado y se abre el
-              cronograma.
+              Opcional. El administrador o el gestor registran los acuerdos con el cliente. El cronograma ya se
+              puede usar si saltaste el kickoff para migrar una obra en curso.
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-            <p className="font-medium">Validación interna</p>
+            <p className="font-medium">Registro interno</p>
             <p className="mt-1">
-              Comercial: {merged.commercialDeliveredAt ? personName(merged.commercialDeliveredBy) : "—"}
+              Extracto: {merged.commercialDeliveredAt ? personName(merged.commercialDeliveredBy) : "—"}
             </p>
-            <p>
-              Gestor: {merged.pmValidatedAt ? personName(merged.pmValidatedBy) : "—"} · {fitLabel(merged.pmFit)}
-            </p>
+            {!isIndividualMode ? (
+              <p>
+                Consulta: {draft.internalDate || "—"} · Plazo kickoff cliente: {draft.clientKickoffDueDate || "—"}
+              </p>
+            ) : (
+              <p>
+                Gestor: {merged.pmValidatedAt ? personName(merged.pmValidatedBy) : "—"}
+              </p>
+            )}
             <p className="mt-2 whitespace-pre-wrap">{draft.finalProposalToClient || draft.commercialCommitment}</p>
-            {merged.areaReviews?.length ? (
+            {draft.internalNotes ? (
+              <p className="mt-2 whitespace-pre-wrap">
+                <span className="font-medium">
+                  {isIndividualMode ? "Notas para validar con el cliente: " : "Comentarios del gestor: "}
+                </span>
+                {draft.internalNotes}
+              </p>
+            ) : null}
+            {isIndividualMode
+              ? INDIVIDUAL_KICKOFF_QUESTIONS.map((item) => {
+                  const answer = draft.internalEvalAnswers?.[item.id]?.trim();
+                  if (!answer) return null;
+                  return (
+                    <p key={item.id} className="mt-2 whitespace-pre-wrap">
+                      <span className="font-medium">{item.knowledgeArea}: </span>
+                      {answer}
+                    </p>
+                  );
+                })
+              : null}
+            {!isIndividualMode && merged.areaReviews?.length ? (
               <div className="mt-2">
                 <p className="font-medium">Comentarios de las áreas</p>
                 {merged.areaReviews.map((item) => (
@@ -676,7 +790,7 @@ export function ClientKickoffAssistant({
 
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
           onClick={() => {
@@ -689,23 +803,36 @@ export function ClientKickoffAssistant({
         >
           {step === "client" ? (onCancel ? "Volver al listado" : "Más tarde") : "Atrás"}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (step === "client") submitClient();
-            else if (step === "project") submitProject();
-            else if (step === "internal") goToClientKickoff();
-            else submitClientKickoff();
-          }}
-          disabled={step === "internal" && !gate.canMeetClient}
-          className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm text-white hover:bg-[var(--brand-dark)] disabled:opacity-40"
-        >
-          {step === "clientKickoff"
-            ? "Iniciar proyecto y abrir cronograma"
-            : step === "internal"
-              ? "Continuar al kickoff con el cliente"
-              : "Continuar"}
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {step !== "client" ? (
+            <button
+              type="button"
+              onClick={skipKickoffToSchedule}
+              className="rounded-md border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50"
+            >
+              Saltar kickoff e ir al cronograma
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              if (step === "client") submitClient();
+              else if (step === "project") submitProject();
+              else if (step === "internal") goToClientKickoff();
+              else submitClientKickoff();
+            }}
+            disabled={step === "internal" && !gate.canMeetClient}
+            className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm text-white hover:bg-[var(--brand-dark)] disabled:opacity-40"
+          >
+            {step === "clientKickoff"
+              ? "Registrar kickoff con el cliente"
+              : step === "internal"
+                ? "Continuar al kickoff con el cliente"
+                : step === "project"
+                  ? "Continuar al kickoff (opcional)"
+                  : "Continuar"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -736,7 +863,9 @@ function seedDraft(
     guarantees: resumedKickoff?.guarantees ?? "",
     permits: resumedKickoff?.permits ?? "",
     workingAgreement: resumedKickoff?.workingAgreement || defaultWorkingAgreement(areas),
+    internalEvalAnswers: resumedKickoff?.internalEvalAnswers ?? {},
     internalDate: resumedKickoff?.internalDate ?? "",
+    clientKickoffDueDate: resumedKickoff?.clientKickoffDueDate ?? "",
     internalNotes: resumedKickoff?.internalNotes ?? "",
     pmFit: resumedKickoff?.pmFit ?? "",
     pmJudgment: resumedKickoff?.pmJudgment ?? "",

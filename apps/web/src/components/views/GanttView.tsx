@@ -3,18 +3,26 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ModalForm } from "@/components/forms/ModalForm";
+import { KpiCard } from "@/components/kpi/KpiCard";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
+import { formatClp, formatRatio, registeredBudgetClp } from "@/lib/evm";
+import { computeLiveEvm } from "@/lib/evm-project";
 import { scheduleUnlocked } from "@/lib/kickoff";
 import {
   ELEMENT_KIND_LABELS,
-  buildScheduleTemplateCsv,
   childrenOf,
-  downloadTextFile,
+  downloadBlob,
   hasScheduleDeviation,
-  parseScheduleCsv,
   rolledProgress,
+  scheduleGridFromActivities,
+  shiftTemplateRows,
 } from "@/lib/schedule-csv";
+import {
+  buildCombinedScheduleFile,
+  buildSplitScheduleZip,
+  parseScheduleUpload,
+} from "@/lib/schedule-workbook";
 import type { GanttActivity, ScheduleElementKind, UserRole } from "@/lib/types";
 
 function toDay(iso: string) {
@@ -48,7 +56,7 @@ function kindBadgeClass(kind: ScheduleElementKind) {
 }
 
 export function GanttView() {
-  const { project, gantt, reports, addGanttActivity, updateGanttActivity, importSchedule, canOperate } =
+  const { project, role, gantt, reports, addGanttActivity, updateGanttActivity, importSchedule, canOperate } =
     useOrg();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<GanttActivity | null>(null);
@@ -57,7 +65,41 @@ export function GanttView() {
   const activities = gantt.filter((item) => item.projectId === project.id);
   const kickoffLocked = !scheduleUnlocked(project);
   const locked = !canOperate("schedule:edit") || kickoffLocked;
+  const example = project.scheduleExample && activities.length > 0;
+  const budgetClp = registeredBudgetClp(project);
+  const waitingBudget = project.id !== "prj-pending" && budgetClp <= 0;
   const roots = activities.filter((item) => !item.parentCode);
+  const live = useMemo(
+    () => computeLiveEvm(project, activities, reports, role),
+    [project, activities, reports, role],
+  );
+
+  function scheduleMeta() {
+    return {
+      projectName: project.name,
+      projectCode: project.code,
+      start: project.startDate,
+      finish: project.finishDate,
+      example: example || !activities.length,
+      budgetClp,
+    };
+  }
+
+  function scheduleDataRows() {
+    return activities.length
+      ? scheduleGridFromActivities(activities)
+      : shiftTemplateRows(project.startDate, project.finishDate);
+  }
+
+  function downloadScheduleWorkbook() {
+    const file = buildCombinedScheduleFile(scheduleMeta(), scheduleDataRows());
+    downloadBlob(file.filename, file.blob);
+  }
+
+  function downloadScheduleSplitBooks() {
+    const file = buildSplitScheduleZip(scheduleMeta(), scheduleDataRows());
+    downloadBlob(file.filename, file.blob);
+  }
 
   const range = useMemo(() => {
     const dates = [
@@ -79,12 +121,10 @@ export function GanttView() {
     return [...map.entries()];
   }, [roots]);
 
-  function handleCsv(file: File | undefined) {
+  async function handleScheduleFile(file: File | undefined) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = String(reader.result ?? "");
-      const { rows, errors } = parseScheduleCsv(text);
+    try {
+      const { rows, errors } = await parseScheduleUpload(file);
       if (errors.length && !rows.length) {
         setNotice(errors[0]);
         return;
@@ -103,11 +143,12 @@ export function GanttView() {
       const milestones = rows.filter((row) => row.elementKind === "hito").length;
       setNotice(
         errors.length
-          ? `Se cargaron ${count} elementos (${inspections} inspecciones, ${office} de escritorio, ${milestones} hitos). ${errors.length} se omitieron.`
-          : `Línea base cargada: ${count} elementos EDT, ${inspections} inspecciones en terreno, ${office} partidas de escritorio, ${milestones} hitos.`,
+          ? `Se cargaron ${count} elementos (${inspections} inspecciones, ${office} de escritorio, ${milestones} hitos). ${errors.length} se omitieron. Ya no es el ejemplo de plantilla.`
+          : `Línea base cargada: ${count} elementos EDT, ${inspections} inspecciones en terreno, ${office} partidas de escritorio, ${milestones} hitos. El ejemplo de plantilla quedó reemplazado.`,
       );
-    };
-    reader.readAsText(file, "utf-8");
+    } catch {
+      setNotice("No se pudo leer el archivo. Sube el Excel de 2 hojas, el libro Cronograma o un CSV con las mismas columnas.");
+    }
   }
 
   function renderBar(item: GanttActivity, nested = false) {
@@ -137,6 +178,7 @@ export function GanttView() {
           <span className="flex items-center gap-2">
             <span>
               {item.start} → {item.end} · {progress}%
+              {item.budgetPv ? ` · ${formatClp(item.budgetPv)}` : ""}
             </span>
             {!locked ? (
               <button
@@ -171,41 +213,68 @@ export function GanttView() {
     <div className="space-y-4">
       {kickoffLocked ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
-          El cronograma se abre cuando Comercial y el gestor de proyectos cierran el kickoff interno y se confirma el kickoff con el cliente.{" "}
+          Crea el proyecto en{" "}
           <Link href="/clients" className="underline">
-            Ir a clientes y kickoff
-          </Link>
-          .
+            Clientes
+          </Link>{" "}
+          para abrir el cronograma. El kickoff es opcional.
         </p>
+      ) : null}
+      {waitingBudget ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+          La plantilla EDT se carga cuando hay un presupuesto registrado. Agrégalo en la fase Proyecto
+          de{" "}
+          <Link href="/clients" className="underline">
+            Clientes
+          </Link>{" "}
+          (presupuesto inicial) o en{" "}
+          <Link href="/budget" className="underline">
+            Presupuesto
+          </Link>
+          . Con ese monto se arman las partidas de ejemplo y el dashboard de costo.
+        </p>
+      ) : null}
+      {example ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+          <p className="font-semibold">Este cronograma es un ejemplo de plantilla. Debes editarlo.</p>
+          <p className="mt-1">
+            Las fechas siguen el inicio previsto ({project.startDate || "—"}) y el término previsto
+            ({project.finishDate || "—"}). El presupuesto planificado de cada partida suma el monto
+            registrado ({formatClp(budgetClp)}). Descarga el Excel, edita la hoja Cronograma y súbela
+            para reemplazar este ejemplo.
+          </p>
+        </div>
       ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-wide text-slate-500">Cronograma de la obra</p>
-          <h1 className="text-xl font-semibold sm:text-2xl">Calendario</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">Cronograma</h1>
           <p className="text-sm text-slate-600">
-            {project.name} · {project.code}. Plantilla EDT (paquetes, actividades, inspecciones e hitos).
-            Si hay desvío, el jefe de proyecto edita el elemento sin perder la línea base.
+            {project.name} · {project.code}. Plazo: {project.startDate || "s/f"} → {project.finishDate || "s/f"}
+            {budgetClp > 0 ? ` · presupuesto inicial ${formatClp(budgetClp)}` : " · sin presupuesto registrado"}
             {locked ? " · solo consulta" : ""}
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
           <button
             type="button"
-            onClick={() =>
-              downloadTextFile(
-                `plantilla-edt-${project.code || "CP-001"}.csv`,
-                buildScheduleTemplateCsv(project.code, project.startDate, project.finishDate),
-              )
-            }
-            className="rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
+            onClick={downloadScheduleWorkbook}
+            className="min-h-11 w-full rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 sm:w-auto"
           >
-            Descargar plantilla CSV
+            {example || !activities.length ? "Descargar plantilla EDT" : "Descargar cronograma"}
+          </button>
+          <button
+            type="button"
+            onClick={downloadScheduleSplitBooks}
+            className="min-h-11 w-full rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 sm:w-auto"
+          >
+            Descargar 2 libros
           </button>
           <button
             type="button"
             disabled={locked}
             onClick={() => fileRef.current?.click()}
-            className="rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-40"
+            className="min-h-11 w-full rounded-md border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-40 sm:w-auto"
           >
             Subir cronograma
           </button>
@@ -213,17 +282,17 @@ export function GanttView() {
             type="button"
             disabled={locked}
             onClick={() => setOpen(true)}
-            className="rounded-md bg-[var(--brand)] px-3 py-2 text-sm text-white hover:bg-[var(--brand-dark)] disabled:opacity-40"
+            className="min-h-11 w-full rounded-md bg-[var(--brand)] px-3 py-2 text-sm text-white hover:bg-[var(--brand-dark)] disabled:opacity-40 sm:w-auto"
           >
             Agregar elemento
           </button>
           <input
             ref={fileRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".xlsx,.csv,.zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
             className="hidden"
             onChange={(event) => {
-              handleCsv(event.target.files?.[0]);
+              void handleScheduleFile(event.target.files?.[0]);
               event.target.value = "";
             }}
           />
@@ -234,12 +303,49 @@ export function GanttView() {
         <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">{notice}</p>
       ) : null}
 
-      <p className="text-xs text-slate-500">
-        Columnas: Código EDT, EDT padre, Tipo de elemento (Paquete de trabajo, Actividad, Inspección en
-        terreno, Hito), Fase, Nombre, Fecha de inicio, Fecha de término, Responsable, Presupuesto
+      {activities.length && budgetClp > 0 ? (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <KpiCard
+            label="Presupuesto inicial"
+            value={formatClp(budgetClp)}
+            status="green"
+            hint={project.bac > 0 ? "BAC aprobado en etapas previas" : "Monto cargado; falta el visto bueno"}
+          />
+          <KpiCard
+            label="Planificado (PV)"
+            value={formatClp(live.pv)}
+            status={live.pv > 0 ? "green" : "yellow"}
+            hint={example ? "PV de la plantilla, proporcional al presupuesto" : "Valor planificado a la fecha"}
+          />
+          <KpiCard
+            label="Valor ganado (EV)"
+            value={formatClp(live.ev)}
+            status={live.metrics.evidenceLocked ? "red" : live.ev >= live.pv ? "green" : "yellow"}
+            hint={`${Math.round(live.physicalPercent * 100)}% del presupuesto de control`}
+          />
+          <KpiCard
+            label="SPI · plazo"
+            value={live.pv > 0 ? formatRatio(live.metrics.spi) : "—"}
+            status={live.pv > 0 ? live.metrics.alerts.spit : "yellow"}
+            hint="EV / PV. ≥ 1 va al día"
+          />
+        </section>
+      ) : null}
+
+      <details className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 md:hidden">
+        <summary className="cursor-pointer font-medium text-slate-700">Formato del Excel EDT</summary>
+        <p className="mt-2">
+          El Excel trae dos hojas: Instrucciones y Cronograma. Columnas: Código EDT, EDT padre, Tipo de
+          elemento, Fase, Nombre, fechas, Responsable, Presupuesto planificado (CLP), Inspección en
+          terreno (Sí/No). El avance del paquete se calcula con evidencia validada.
+        </p>
+      </details>
+      <p className="hidden text-xs text-slate-500 md:block">
+        El Excel trae dos hojas: Instrucciones (nombre del proyecto, plazo y reglas) y Cronograma (las
+        partidas). También puedes bajar dos libros aparte y subir solo el del cronograma. Columnas:
+        Código EDT, EDT padre, Tipo de elemento, Fase, Nombre, fechas, Responsable, Presupuesto
         planificado (CLP), Inspección en terreno (Sí/No). El avance del paquete se calcula con evidencia
-        validada: foto de faena o documento de escritorio según el responsable. Un hito marca un punto de
-        control (misma fecha de inicio y término). Las áreas de escritorio cargan su respaldo en Avance.
+        validada. Un hito usa la misma fecha de inicio y término.
       </p>
 
       <div className="space-y-3 md:hidden">
@@ -254,6 +360,7 @@ export function GanttView() {
               <p className="font-medium">{item.name}</p>
               <p className="mt-1 text-xs text-slate-500">
                 {item.start} → {item.end} · {item.assigneeRole ? ROLE_LABELS[item.assigneeRole] : "Sin responsable"}
+                {item.budgetPv ? ` · ${formatClp(item.budgetPv)}` : ""}
                 {hasScheduleDeviation(item) ? " · desvío vs línea base" : ""}
               </p>
               <div className="mt-2 h-2 overflow-hidden rounded bg-slate-100">
@@ -271,7 +378,11 @@ export function GanttView() {
           );
         })}
         {!activities.length ? (
-          <p className="text-sm text-slate-500">Sin elementos. Descarga la plantilla EDT o agrega el primero.</p>
+          <p className="text-sm text-slate-500">
+            {waitingBudget
+              ? "Sin elementos. Registra el presupuesto inicial para cargar la plantilla EDT."
+              : "Sin elementos. Descarga la plantilla EDT o agrega el primero."}
+          </p>
         ) : null}
       </div>
 
@@ -284,8 +395,9 @@ export function GanttView() {
         ))}
         {!activities.length ? (
           <p className="rounded-xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-            Sin elementos. Descarga la plantilla CSV, completa paquetes, actividades, inspecciones e hitos, y
-            súbela.
+            {waitingBudget
+              ? "Sin elementos. El cronograma de ejemplo espera el presupuesto registrado en las etapas previas."
+              : "Sin elementos. Descarga la plantilla EDT, completa paquetes, actividades, inspecciones e hitos, y súbela."}
           </p>
         ) : null}
       </div>

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   BookOpen,
+  ClipboardList,
   Building2,
   Camera,
   CircleDollarSign,
@@ -21,6 +22,7 @@ import { useOrg } from "@/components/layout/OrgProvider";
 const ICONS: Record<string, typeof LayoutDashboard> = {
   "/demo": Home,
   "/knowledge": BookOpen,
+  "/libro-obra": ClipboardList,
   "/admin": Building2,
   "/users": Users,
   "/profiles": IdCard,
@@ -54,7 +56,7 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur print:hidden lg:hidden"
       style={{ paddingBottom: "var(--safe-bottom)" }}
     >
       <ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>

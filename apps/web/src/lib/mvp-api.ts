@@ -11,6 +11,8 @@ export type MvpSnapshot = {
   assignments?: unknown[];
   gantt?: unknown[];
   reports?: unknown[];
+  workBook?: unknown[];
+  workBookMetas?: unknown[];
   profiles?: unknown[];
   areas?: unknown[];
   sessionUserId?: string;
@@ -26,7 +28,9 @@ export function mvpApiEnabled() {
 export async function fetchMvpSnapshot(): Promise<MvpSnapshot | null> {
   if (!API_URL) return null;
   try {
-    const response = await fetch(`${API_URL}/api/v1/mvp/snapshot`);
+    const response = await fetch(`${API_URL}/api/v1/mvp/snapshot`, {
+      signal: AbortSignal.timeout(2500),
+    });
     if (response.status === 404) return null;
     if (!response.ok) return null;
     return (await response.json()) as MvpSnapshot;

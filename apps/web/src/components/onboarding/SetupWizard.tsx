@@ -4,16 +4,18 @@ import { useRouter } from "next/navigation";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { OpenEvmMark } from "@/components/brand/OpenEvmMark";
 import { HandoverConfirm } from "@/components/auth/HandoverConfirm";
+import { SsoLabPicker } from "@/components/auth/SsoLabPicker";
 import { TenantStructureStep } from "@/components/onboarding/TenantStructureStep";
 import { OperatingModeStep } from "@/components/onboarding/OperatingModeStep";
 import { SETUP_RESET_QUERY } from "@/lib/constants";
+import { PASSWORD_MIN_LENGTH, splitPersonName, type SsoProvider } from "@/lib/identity";
 import { activityTypeLabel } from "@/lib/tenant-setup";
 import { PRESET_LABEL } from "@/lib/company-presets";
 import { isFirstOfRole } from "@/lib/handover";
 import { resolveOperatingMode } from "@/lib/operating-mode";
 import { useState } from "react";
 import type { OrgArea, OrgProfile, TenantUser } from "@/lib/types";
-import type { RegisterPayload } from "@/components/layout/OrgProvider";
+import type { CompanyPayload, RegisterPayload } from "@/components/layout/OrgProvider";
 
 const COLLAB_STEPS = [
   { id: "register" as const, label: "Empresa" },
@@ -31,6 +33,7 @@ const INDIVIDUAL_STEPS = [
 export function SetupWizard() {
   const {
     setupPhase,
+    identifyRepresentative,
     completeRegister,
     completeOperatingMode,
     completeStructure,
@@ -46,8 +49,12 @@ export function SetupWizard() {
     profiles,
     areas,
     sessionUser,
+    identity,
+    signOut,
   } = useOrg();
   const router = useRouter();
+  const [registerNotice, setRegisterNotice] = useState<string | null>(null);
+  const identified = Boolean(identity?.email?.includes("@"));
   const operatingMode = resolveOperatingMode(tenant);
   const STEPS = operatingMode === "collaborative" || setupPhase === "structure" || setupPhase === "raci" || setupPhase === "invites"
     ? COLLAB_STEPS
@@ -76,19 +83,38 @@ export function SetupWizard() {
     <div className="min-h-screen bg-[var(--brand)] text-white">
       <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-3 py-6 sm:px-6 sm:py-8">
         <header className="mb-6 flex items-start justify-between gap-3">
-          <OpenEvmMark variant="light" subtitle="Setup 0 · tenant y modo de trabajo" />
-          <button
-            type="button"
-            className="rounded-md border border-white/25 px-2 py-1 text-[11px] text-white/80 hover:bg-white/10 sm:text-xs"
-            onClick={() => {
-              if (window.confirm("Se borra el alta de este navegador y vuelves al paso 1.")) {
-                resetOnboarding();
-                router.replace(`/setup?${SETUP_RESET_QUERY}=1`);
-              }
-            }}
-          >
-            Empezar de cero
-          </button>
+          <OpenEvmMark variant="light" />
+          <div className="flex flex-col items-end gap-1">
+            {identity ? (
+              <p className="max-w-[12rem] truncate text-right text-[11px] text-white/75">
+                {identity.name} · {identity.email}
+              </p>
+            ) : null}
+            <div className="flex gap-1">
+              <button
+                type="button"
+                className="rounded-md border border-white/25 px-2 py-1 text-[11px] text-white/80 hover:bg-white/10 sm:text-xs"
+                onClick={() => {
+                  signOut();
+                  router.replace("/login");
+                }}
+              >
+                Salir
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-white/25 px-2 py-1 text-[11px] text-white/80 hover:bg-white/10 sm:text-xs"
+                onClick={() => {
+                  if (window.confirm("Se borra el alta de este navegador y vuelves al paso 1.")) {
+                    resetOnboarding();
+                    router.replace(`/setup?${SETUP_RESET_QUERY}=1`);
+                  }
+                }}
+              >
+                Empezar de cero
+              </button>
+            </div>
+          </div>
         </header>
 
         <ol className={`mb-6 grid gap-1 text-[11px] sm:gap-2 sm:text-xs ${STEPS.length === 2 ? "grid-cols-2" : "grid-cols-5"}`}>
@@ -121,15 +147,63 @@ export function SetupWizard() {
         </ol>
 
         <div className="flex-1 rounded-2xl bg-white p-4 text-[var(--foreground)] shadow-xl sm:p-8">
-          {setupPhase === "register" ? (
-            <RegisterStep
-              defaults={{
-                name: sessionUser.name,
-                email: sessionUser.email,
-                company: tenant.name,
-                rut: tenant.rut,
+          {setupPhase === "register" && !identified ? (
+            <AccountStep
+              notice={registerNotice}
+              onGoToLogin={() => {
+                signOut();
+                router.replace("/login");
               }}
-              onSubmit={(payload) => completeRegister(payload)}
+              onSso={(provider, name, email) => {
+                const names = splitPersonName(name);
+                const result = identifyRepresentative({
+                  firstName: names.firstName,
+                  lastName: names.lastName,
+                  name,
+                  email,
+                  password: "",
+                  passwordConfirm: "",
+                  provider,
+                });
+                if (!result.ok) setRegisterNotice(result.message);
+                else setRegisterNotice(null);
+              }}
+              onSubmit={(payload) => {
+                const result = identifyRepresentative(payload);
+                if (!result.ok) {
+                  setRegisterNotice(result.message);
+                  return;
+                }
+                setRegisterNotice(null);
+              }}
+            />
+          ) : null}
+
+          {setupPhase === "register" && identified ? (
+            <CompanyStep
+              representativeName={identity?.name || sessionUser.name}
+              representativeEmail={identity?.email || sessionUser.email}
+              signInLabel={
+                identity?.provider === "google"
+                  ? "Google"
+                  : identity?.provider === "microsoft"
+                    ? "Microsoft"
+                    : "correo y clave"
+              }
+              defaults={{ company: tenant.name, rut: tenant.rut }}
+              notice={registerNotice}
+              onGoToLogin={() => {
+                signOut();
+                router.replace("/login");
+              }}
+              onSubmit={(payload) => {
+                const result = completeRegister(payload);
+                if (!result.ok) {
+                  setRegisterNotice(result.message);
+                  return;
+                }
+                setRegisterNotice(null);
+              }}
             />
           ) : null}
 
@@ -192,12 +266,154 @@ export function SetupWizard() {
   );
 }
 
-function RegisterStep({
-  defaults,
+function AltaProgress({ stage }: { stage: "account" | "company" }) {
+  return (
+    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+      <span className={stage === "account" ? "text-[var(--brand)]" : ""}>1. Cuenta</span>
+      {" · "}
+      <span className={stage === "company" ? "text-[var(--brand)]" : ""}>2. Empresa</span>
+    </p>
+  );
+}
+
+function AccountStep({
+  notice,
   onSubmit,
+  onSso,
+  onGoToLogin,
 }: {
-  defaults: RegisterPayload;
+  notice?: string | null;
   onSubmit: (payload: RegisterPayload) => void;
+  onSso: (provider: Exclude<SsoProvider, "email">, name: string, email: string) => void;
+  onGoToLogin: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <AltaProgress stage="account" />
+        <h1 className="mt-2 text-xl font-semibold sm:text-2xl">Cuenta del representante</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          Primero te identificás. Podés entrar con Gmail, Microsoft o con correo y clave. Después cargás la empresa.
+          Solo el representante invita al resto del equipo.
+        </p>
+      </div>
+      <SsoLabPicker onSelect={(provider, profile) => onSso(provider, profile.name, profile.email)} />
+      <div className="relative py-1 text-center text-xs font-medium uppercase tracking-wide text-slate-400">
+        <span className="bg-white px-2">o con correo</span>
+        <span className="absolute inset-x-0 top-1/2 -z-10 border-t border-slate-200" />
+      </div>
+      <form
+        className="space-y-4"
+        autoComplete="off"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
+          const firstName = String(form.get("firstName") ?? "").trim();
+          const lastName = String(form.get("lastName") ?? "").trim();
+          onSubmit({
+            firstName,
+            lastName,
+            name: `${firstName} ${lastName}`.trim(),
+            email: String(form.get("email") ?? ""),
+            password: String(form.get("password") ?? ""),
+            passwordConfirm: String(form.get("passwordConfirm") ?? ""),
+            provider: "email",
+          });
+        }}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Nombre</span>
+            <input
+              name="firstName"
+              required
+              autoComplete="off"
+              placeholder="Nombre"
+              className="w-full rounded-md border border-slate-200 px-3 py-2"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Apellido</span>
+            <input
+              name="lastName"
+              required
+              autoComplete="off"
+              placeholder="Apellido"
+              className="w-full rounded-md border border-slate-200 px-3 py-2"
+            />
+          </label>
+        </div>
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium">Correo</span>
+          <input
+            name="email"
+            type="email"
+            required
+            autoComplete="off"
+            placeholder="correo corporativo"
+            className="w-full rounded-md border border-slate-200 px-3 py-2"
+          />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Clave de inicio de sesión</span>
+            <input
+              name="password"
+              type="password"
+              required
+              autoComplete="new-password"
+              minLength={PASSWORD_MIN_LENGTH}
+              placeholder={`Mínimo ${PASSWORD_MIN_LENGTH} caracteres`}
+              className="w-full rounded-md border border-slate-200 px-3 py-2"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Confirmar clave</span>
+            <input
+              name="passwordConfirm"
+              type="password"
+              required
+              autoComplete="new-password"
+              minLength={PASSWORD_MIN_LENGTH}
+              className="w-full rounded-md border border-slate-200 px-3 py-2"
+            />
+          </label>
+        </div>
+        {notice ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">{notice}</p> : null}
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+          {notice ? (
+            <button type="button" onClick={onGoToLogin} className="text-sm text-slate-600 underline">
+              Ir a iniciar sesión
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm text-white hover:bg-[var(--brand-dark)]"
+          >
+            Continuar a la empresa
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function CompanyStep({
+  representativeName,
+  representativeEmail,
+  signInLabel,
+  defaults,
+  notice,
+  onSubmit,
+  onGoToLogin,
+}: {
+  representativeName: string;
+  representativeEmail: string;
+  signInLabel: string;
+  defaults: CompanyPayload;
+  notice?: string | null;
+  onSubmit: (payload: CompanyPayload) => void;
+  onGoToLogin: () => void;
 }) {
   return (
     <form
@@ -207,44 +423,19 @@ function RegisterStep({
         event.preventDefault();
         const form = new FormData(event.currentTarget);
         onSubmit({
-          name: String(form.get("name") ?? ""),
-          email: String(form.get("email") ?? ""),
           company: String(form.get("company") ?? ""),
           rut: String(form.get("rut") ?? ""),
         });
       }}
     >
       <div>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 1 · Setup 0</p>
-        <h1 className="text-xl font-semibold sm:text-2xl">Crear el tenant</h1>
+        <AltaProgress stage="company" />
+        <h1 className="mt-2 text-xl font-semibold sm:text-2xl">Registro de la empresa</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Datos de la empresa y de quien la representa. En el paso siguiente eliges si trabajas como
-          profesional independiente o con un equipo colaborativo.
+          Representante: <strong>{representativeName}</strong> ({representativeEmail}). Entrada con {signInLabel}.
+          Al cerrar sesión vas a volver a entrar con esa cuenta.
         </p>
       </div>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium">Nombre del representante</span>
-        <input
-          name="name"
-          required
-          autoComplete="off"
-          defaultValue={defaults.name}
-          placeholder="Nombre y apellido"
-          className="w-full rounded-md border border-slate-200 px-3 py-2"
-        />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium">Correo del representante</span>
-        <input
-          name="email"
-          type="email"
-          required
-          autoComplete="off"
-          defaultValue={defaults.email}
-          placeholder="correo corporativo"
-          className="w-full rounded-md border border-slate-200 px-3 py-2"
-        />
-      </label>
       <label className="block text-sm">
         <span className="mb-1 block font-medium">Razón social</span>
         <input
@@ -270,7 +461,13 @@ function RegisterStep({
           className="w-full rounded-md border border-slate-200 px-3 py-2"
         />
       </label>
-      <div className="flex justify-end pt-2">
+      {notice ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">{notice}</p> : null}
+      <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+        {notice ? (
+          <button type="button" onClick={onGoToLogin} className="text-sm text-slate-600 underline">
+            Ir a iniciar sesión
+          </button>
+        ) : null}
         <button
           type="submit"
           className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm text-white hover:bg-[var(--brand-dark)]"

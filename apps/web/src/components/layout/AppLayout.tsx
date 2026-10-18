@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { Menu, UserRound, X } from "lucide-react";
+import { ChevronDown, Menu, UserRound, X } from "lucide-react";
 import { OpenEvmMark } from "@/components/brand/OpenEvmMark";
+import { BoundedSelect } from "@/components/forms/BoundedSelect";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { ROLE_LABELS, NAV_GROUP_LABELS } from "@/lib/constants";
 import { personLabel } from "@/lib/handover";
+import { OPERATING_MODE_LABEL, resolveOperatingMode } from "@/lib/operating-mode";
 import { HOME_HREF } from "@/lib/startup-flow";
 import { useOrg } from "./OrgProvider";
 import { useRoleContext } from "./RoleProvider";
@@ -30,22 +32,27 @@ export function AppLayout({ children }: { children: ReactNode }) {
     nav,
     role,
     isIndividualMode,
+    identity,
+    signOut,
   } = useOrg();
   const [open, setOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
+  const currentProject = visibleProjects.find((item) => item.id === projectId);
+  const mode = resolveOperatingMode(tenant);
 
   return (
-    <div className="min-h-dvh bg-[var(--background)] text-[var(--foreground)]">
+    <div className="min-h-dvh overflow-x-hidden bg-[var(--background)] text-[var(--foreground)]">
       {open ? (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-[var(--brand)]/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-[var(--brand)]/40 print:hidden lg:hidden"
           aria-label="Cerrar menú"
           onClick={() => setOpen(false)}
         />
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[min(18rem,88vw)] flex-col bg-[var(--brand)] text-white transition-transform lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,88vw)] flex-col bg-[var(--brand)] text-white transition-transform print:hidden lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{ paddingTop: "var(--safe-top)" }}
@@ -93,88 +100,114 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <div className="flex min-h-dvh min-w-0 flex-col lg:pl-72">
         <header
-          className="sticky top-0 z-20 border-b border-zinc-200 bg-[var(--header)] px-3 py-2 sm:px-4"
+          className="sticky top-0 z-20 border-b border-zinc-200 bg-[var(--header)] px-3 py-2 print:hidden sm:px-4"
           style={{ paddingTop: "max(0.5rem, var(--safe-top))" }}
         >
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-md border border-zinc-200 p-2 lg:hidden"
+              className="shrink-0 rounded-md border border-zinc-200 p-2 lg:hidden"
               onClick={() => setOpen(true)}
               aria-label="Abrir menú"
             >
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1 lg:hidden">
-              <OpenEvmMark />
+              <OpenEvmMark compact />
             </div>
-            <div className="ml-auto flex items-center gap-2 rounded-full bg-[var(--brand)] px-2.5 py-1 text-white">
-              <UserRound className="h-4 w-4 shrink-0" />
-              <span className="max-w-[7.5rem] truncate text-xs sm:max-w-[9rem] sm:text-sm">
-                {ROLE_LABELS[role]}
-              </span>
+            <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <div className="flex min-w-0 max-w-[42vw] items-center gap-1.5 rounded-full bg-[var(--brand)] px-2 py-1 text-white sm:max-w-none sm:gap-2 sm:px-2.5">
+                <UserRound className="h-4 w-4 shrink-0" />
+                <span className="truncate text-xs sm:text-sm">
+                  {identity?.name || ROLE_LABELS[role]}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  signOut();
+                  router.replace("/login");
+                }}
+                className="shrink-0 rounded-md border border-zinc-200 px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 sm:text-xs"
+              >
+                Salir
+              </button>
             </div>
           </div>
 
-          <div className={`mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 ${isIndividualMode ? "xl:grid-cols-3" : "xl:grid-cols-4"}`}>
-            <label className="block min-w-0">
+          <button
+            type="button"
+            className="mt-2 flex w-full items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-left lg:hidden"
+            aria-expanded={contextOpen}
+            onClick={() => setContextOpen((value) => !value)}
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium text-zinc-900">
+                {currentProject?.name || "Sin proyecto"}
+              </span>
+              <span className="block truncate text-[11px] text-zinc-500">
+                {tenant.name || "Empresa"}
+                {mode ? ` · ${OPERATING_MODE_LABEL[mode]}` : ""}
+              </span>
+            </span>
+            <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-500 transition ${contextOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          <div
+            className={`${contextOpen ? "mt-2 grid" : "hidden"} grid-cols-1 gap-2 sm:grid-cols-2 lg:mt-2 lg:grid ${
+              isIndividualMode ? "xl:grid-cols-3" : "xl:grid-cols-4"
+            }`}
+          >
+            <div className="block min-w-0">
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Empresa</span>
-              <select
-                className="w-full min-w-0 truncate rounded-md border border-zinc-200 bg-white px-2 py-2"
-                defaultValue={tenant.id}
+              <BoundedSelect
                 aria-label="Empresa actual"
-              >
-                <option value={tenant.id}>{tenant.name || "Nueva organización"}</option>
-              </select>
-            </label>
-            <label className="block min-w-0">
+                value={tenant.id}
+                onChange={() => undefined}
+                options={[{ value: tenant.id, label: tenant.name || "Nueva organización" }]}
+              />
+            </div>
+            <div className="block min-w-0">
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Proyecto</span>
-              <select
-                className="w-full min-w-0 truncate rounded-md border border-zinc-200 bg-white px-2 py-2"
-                value={projectId}
-                onChange={(event) => setProjectId(event.target.value)}
+              <BoundedSelect
                 aria-label="Proyecto actual"
-              >
-                {visibleProjects.length ? (
-                  visibleProjects.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">Sin proyectos asignados</option>
-                )}
-              </select>
-            </label>
+                value={projectId}
+                onChange={setProjectId}
+                options={
+                  visibleProjects.length
+                    ? visibleProjects.map((item) => ({ value: item.id, label: item.name }))
+                    : [{ value: "", label: "Sin proyectos asignados" }]
+                }
+              />
+            </div>
             <OperatingModeSwitch />
             {isIndividualMode ? null : (
-            <label className="block min-w-0 sm:col-span-2 xl:col-span-1">
+            <div className="block min-w-0 sm:col-span-2 xl:col-span-1">
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Ver como</span>
-              <select
-                className="w-full min-w-0 truncate rounded-md border border-zinc-200 bg-white px-2 py-2"
+              <BoundedSelect
+                aria-label="Persona de demostración"
                 value={sessionUserId}
-                onChange={(event) => {
-                  setSessionUserId(event.target.value);
+                onChange={(next) => {
+                  setSessionUserId(next);
                   router.push(HOME_HREF);
                 }}
-                aria-label="Persona de demostración"
-              >
-                {users
+                options={users
                   .filter((item) => item.active)
-                  .map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {personLabel(item.name, item.role, Boolean(item.profileId))}
-                    </option>
-                  ))}
-              </select>
-            </label>
+                  .map((item) => ({
+                    value: item.id,
+                    label: personLabel(item.name, item.role, Boolean(item.profileId)),
+                  }))}
+              />
+            </div>
             )}
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 px-3 py-4 pb-24 sm:px-6 sm:py-6 lg:pb-6">{children}</main>
+        <main className="min-w-0 flex-1 px-3 py-4 pb-[calc(5.75rem+var(--safe-bottom))] sm:px-6 sm:py-6 lg:pb-6 print:p-0 print:pb-0">
+          {children}
+        </main>
 
-        <footer className="hidden border-t border-zinc-200 bg-white px-4 py-3 text-center text-[11px] text-zinc-500 sm:block sm:px-6 lg:mb-0">
+        <footer className="hidden border-t border-zinc-200 bg-white px-4 py-3 text-center text-[11px] text-zinc-500 print:hidden sm:block sm:px-6 lg:mb-0">
           {ENV_FOOTER}
         </footer>
       </div>

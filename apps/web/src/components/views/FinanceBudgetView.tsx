@@ -12,9 +12,12 @@ export function FinanceBudgetView() {
   const [target, setTarget] = useState<Project | null>(null);
   const queue = visibleProjects.filter(
     (item) =>
-      item.status === "awaiting_budget" ||
-      item.status === "budget_counter" ||
-      (item.status === "active" && !item.bac),
+      item.id !== "prj-pending" &&
+      !item.bac &&
+      (item.status === "draft_kickoff" ||
+        item.status === "awaiting_budget" ||
+        item.status === "budget_counter" ||
+        item.status === "active"),
   );
 
   return (

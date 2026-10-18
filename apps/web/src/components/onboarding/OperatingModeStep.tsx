@@ -46,7 +46,6 @@ export function OperatingModeStep({
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-xs uppercase tracking-wide text-slate-500">Paso 2 · Setup 0</p>
         <h1 className="text-xl font-semibold sm:text-2xl">Cómo vas a trabajar</h1>
         <p className="mt-2 text-sm text-slate-600">
           {company || "Tu empresa"}: elige la versión. El ciclo de la obra es el mismo; cambia si gestionas

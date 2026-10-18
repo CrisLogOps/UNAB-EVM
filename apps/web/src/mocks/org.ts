@@ -1,5 +1,6 @@
 import { demoProject, demoTenant } from "@/mocks/demo-project";
 import { defaultComponentIds } from "@/lib/components-catalog";
+import { emptyTenantIntegrations } from "@/lib/tenant-integrations";
 import type {
   GanttActivity,
   OrgArea,
@@ -201,6 +202,7 @@ export const privateProject: Project = {
   proposedBac: null,
   counterBac: null,
   budgetNote: "",
+  scheduleExample: false,
 };
 
 export const initialProjects: Project[] = [demoProject, privateProject];
@@ -327,4 +329,5 @@ export const emptyTenant = (): Tenant => ({
   activityType: "",
   companySize: "",
   operatingMode: "",
+  integrations: emptyTenantIntegrations(),
 });

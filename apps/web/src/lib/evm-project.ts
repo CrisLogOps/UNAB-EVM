@@ -15,11 +15,32 @@ import type {
   UserRole,
 } from "./types";
 
+export type ScheduleRunStatus = "pending" | "in_progress" | "done" | "late";
+
+export const SCHEDULE_RUN_STATUS_LABELS: Record<ScheduleRunStatus, string> = {
+  pending: "No iniciada",
+  in_progress: "En curso",
+  done: "Completada",
+  late: "Atrasada",
+};
+
+export function scheduleRunStatus(
+  row: { start: string; end: string; earnedPercent: number },
+  asOf = new Date().toISOString().slice(0, 10),
+): ScheduleRunStatus {
+  if (row.earnedPercent >= 0.999) return "done";
+  if (row.end && asOf > row.end) return "late";
+  if (row.start && asOf < row.start) return "pending";
+  return "in_progress";
+}
+
 export interface ActivityEvmRow {
   id: string;
   code: string;
   name: string;
   kind: ScheduleElementKind;
+  stage: string;
+  assigneeRole: UserRole | "";
   start: string;
   end: string;
   plannedPercent: number;
@@ -135,6 +156,8 @@ export function computeLiveEvm(
       code: item.code,
       name: item.name,
       kind: item.elementKind,
+      stage: item.stage || "General",
+      assigneeRole: item.assigneeRole,
       start: item.start,
       end: item.end,
       plannedPercent: planned,
