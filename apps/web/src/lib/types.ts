@@ -48,6 +48,7 @@ export type PlatformComponentId =
   | "cuts"
   | "evidence"
   | "progress"
+  | "quality"
   | "costs"
   | "knowledge"
   | "workbook";
@@ -326,6 +327,8 @@ export type WorkBookKind = "ito" | "progress" | "safety" | "third_party";
 export type WorkBookSource = "manual" | "progress";
 export type WorkBookSafetyLevel = "" | "observation" | "incident" | "accident";
 export type WorkBookThirdPartyKind = "" | "claim" | "interference";
+/** Autocontrol de faena (modo individual). No es firma legal del folio. */
+export type WorkBookBoardStatus = "open" | "doing" | "closed";
 
 /** Carátula del libro: datos mínimos para una copia de fiscalización. */
 export interface WorkBookMeta {
@@ -361,6 +364,81 @@ export interface WorkBookEntry {
   thirdPartyKind: WorkBookThirdPartyKind;
   thirdPartyName: string;
   activityId: string;
+  boardStatus: WorkBookBoardStatus;
+}
+
+export type QualityFamily = "calidad" | "seguridad";
+export type QualityItemResult = "pending" | "ok" | "na" | "fail";
+export type NonconformityStatus = "open" | "doing" | "closed";
+
+export interface QualityTemplateItem {
+  id: string;
+  text: string;
+  blocking: boolean;
+}
+
+export interface QualityTemplate {
+  id: string;
+  family: QualityFamily;
+  name: string;
+  hint: string;
+  items: QualityTemplateItem[];
+}
+
+export interface QualityGeo {
+  lat: number;
+  lng: number;
+  accuracy: number;
+}
+
+export interface QualityCheckItem {
+  id: string;
+  templateItemId: string;
+  text: string;
+  blocking: boolean;
+  result: QualityItemResult;
+  note: string;
+  evidenceName: string;
+  gps?: QualityGeo;
+  recordedAt: string;
+  recordedBy: string;
+}
+
+export interface QualityCheck {
+  id: string;
+  projectId: string;
+  activityId: string;
+  templateId: string;
+  templateName: string;
+  family: QualityFamily;
+  items: QualityCheckItem[];
+  updatedAt: string;
+}
+
+export interface QualityDecision {
+  at: string;
+  by: string;
+  action: string;
+}
+
+export interface Nonconformity {
+  id: string;
+  projectId: string;
+  activityId: string;
+  checkId: string;
+  itemId: string;
+  title: string;
+  detail: string;
+  blocking: boolean;
+  ownerUserId: string;
+  dueOn: string;
+  status: NonconformityStatus;
+  openedAt: string;
+  openedBy: string;
+  closedAt: string | null;
+  closeNote: string;
+  closeEvidenceName: string;
+  decisions: QualityDecision[];
 }
 
 export interface ProgressReport {

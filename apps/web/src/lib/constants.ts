@@ -26,11 +26,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const NAV_GROUP_LABELS = {
-  hoy: "Hoy",
+  hoy: "Inicio",
   personas: "Personas",
   obra: "La obra",
   dinero: "Dinero",
-  empresa: "Empresa",
 } as const;
 
 export type NavGroup = keyof typeof NAV_GROUP_LABELS;

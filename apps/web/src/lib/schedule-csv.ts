@@ -155,7 +155,7 @@ function excelSerialToIso(serial: number): string {
 function normalizeDate(value: string): string | null {
   const raw = value.trim();
   if (!raw) return null;
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
   const dmy = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (dmy) {
@@ -168,6 +168,25 @@ function normalizeDate(value: string): string | null {
     if (serial >= 20000 && serial <= 80000) return excelSerialToIso(serial);
   }
   return null;
+}
+
+/** Excel suele poner "-" o "n/a" en EDT padre cuando el paquete es de primer nivel. */
+export function normalizeParentCode(raw: string, code = ""): string {
+  const parent = raw.trim();
+  if (!parent || parent === code) return "";
+  const key = parent
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/^[-–—._/\\]+$/.test(parent)) return "";
+  if (["n/a", "na", "ninguno", "ninguna", "s/p", "sp", "vacio", "vacío", "none", "null"].includes(key)) return "";
+  return parent;
+}
+
+/** Primer nivel del Gantt: sin padre, o cuyo padre no está en el archivo. */
+export function scheduleRoots(activities: GanttActivity[]) {
+  const codes = new Set(activities.map((item) => item.code).filter(Boolean));
+  return activities.filter((item) => !item.parentCode || !codes.has(item.parentCode));
 }
 
 function parseYes(value: string): boolean {
@@ -188,7 +207,7 @@ export function parseElementKind(value: string): ScheduleElementKind | "" {
     key.includes("inspeccion") ||
     key.includes("subtarea") ||
     key.includes("control en terreno") ||
-    key.includes("validacion")
+    key.includes("validacion en terreno")
   ) {
     return "inspeccion";
   }
@@ -263,8 +282,7 @@ export function parseScheduleMatrix(table: string[][]): { rows: ScheduleCsvRow[]
       errors.push(`Fila ${lineNo}: la fecha de término no puede ser anterior al inicio.`);
       return;
     }
-    const parentRaw = get(cells, "parent").trim();
-    const parentCode = parentRaw === code ? "" : parentRaw;
+    const parentCode = normalizeParentCode(get(cells, "parent"), code);
     const tipo = get(cells, "kind");
     const kindHint = parseElementKind(tipo);
     const isChild = Boolean(parentCode) || kindHint === "inspeccion" || kindHint === "actividad";
@@ -537,7 +555,7 @@ export function normalizeGanttActivity(
 ): GanttActivity {
   const start = item.start;
   const end = item.end;
-  const parentCode = item.parentCode && item.parentCode === (item.code ?? "") ? "" : (item.parentCode ?? "");
+  const parentCode = normalizeParentCode(item.parentCode ?? "", item.code ?? "");
   const assigneeRole = item.assigneeRole ?? "";
   const requiresFieldEvidence =
     item.requiresFieldEvidence ?? (Boolean(parentCode) && (assigneeRole === "field" || assigneeRole === ""));
@@ -587,8 +605,10 @@ export function rolledProgress(
   activities: GanttActivity[],
   reports: ProgressReport[] = [],
   seen: Set<string> = new Set(),
+  held?: Set<string>,
 ): number {
   const key = item.id || item.code;
+  if (held?.has(item.id)) return 0;
   if (key && seen.has(key)) return item.progress ?? 0;
   if (key) seen.add(key);
   const children = childrenOf(activities, item.code).filter((child) => (child.id || child.code) !== key);
@@ -597,14 +617,14 @@ export function rolledProgress(
       (report) => report.taskId === item.id && report.evidenceStatus === "validated",
     );
     if (validated) return item.progress;
-    if (activityRequiresEvidence(item) && item.progress === 0) return 0;
+    if (activityRequiresEvidence(item, activities) && item.progress === 0) return 0;
     return item.progress;
   }
   const measurable = children.filter((child) => child.elementKind !== "hito" || child.requiresFieldEvidence);
   const leaves = measurable.filter((child) => !childrenOf(activities, child.code).length);
   const pool = leaves.length ? leaves : measurable.length ? measurable : children;
   const nextSeen = new Set(seen);
-  const total = pool.reduce((sum, child) => sum + rolledProgress(child, activities, reports, nextSeen), 0);
+  const total = pool.reduce((sum, child) => sum + rolledProgress(child, activities, reports, nextSeen, held), 0);
   return Math.round(total / pool.length);
 }
 
@@ -621,10 +641,26 @@ export function isFieldEvidenceActivity(item: GanttActivity, activities: GanttAc
 }
 
 /** El avance de esta partida cuenta cuando hay evidencia validada (foto en terreno o documento de otra área). */
-export function activityRequiresEvidence(item: GanttActivity) {
+export function activityRequiresEvidence(item: GanttActivity, activities: GanttActivity[] = []) {
   if (item.elementKind === "paquete") return false;
+  if (activities.length && childrenOf(activities, item.code).length) return false;
   if (item.elementKind === "hito") return item.requiresFieldEvidence;
   return item.requiresFieldEvidence || item.elementKind === "inspeccion" || Boolean(item.assigneeRole);
+}
+
+export function isScheduleSummary(item: GanttActivity, activities: GanttActivity[]) {
+  return childrenOf(activities, item.code).length > 0;
+}
+
+/** Hojas del EDT: partidas que sí se pueden registrar (el paquete padre se cierra con estas). */
+export function leafDescendants(item: GanttActivity, activities: GanttActivity[]): GanttActivity[] {
+  const kids = childrenOf(activities, item.code);
+  if (!kids.length) return [item];
+  return kids.flatMap((child) => leafDescendants(child, activities));
+}
+
+export function scheduleSummaries(activities: GanttActivity[]) {
+  return activities.filter((item) => isScheduleSummary(item, activities));
 }
 
 export function reportableActivitiesForRole(
@@ -632,13 +668,12 @@ export function reportableActivitiesForRole(
   role: UserRole,
   ownerCovers = false,
 ): GanttActivity[] {
-  const candidates = activities.filter((item) => {
-    if (item.elementKind === "paquete") return false;
-    if (childrenOf(activities, item.code).length) return false;
+  const leaves = activities.filter((item) => !isScheduleSummary(item, activities));
+  if (ownerCovers || role === "owner") return leaves;
+  const candidates = leaves.filter((item) => {
     if (item.elementKind === "hito" && !item.requiresFieldEvidence) return false;
-    return activityRequiresEvidence(item);
+    return activityRequiresEvidence(item, activities);
   });
-  if (ownerCovers || role === "owner") return candidates;
   if (role === "field") {
     return candidates.filter(
       (item) =>
@@ -655,5 +690,5 @@ export function reportableActivitiesForRole(
 }
 
 export function isOfficeEvidenceActivity(item: GanttActivity, activities: GanttActivity[]) {
-  return activityRequiresEvidence(item) && !isFieldEvidenceActivity(item, activities);
+  return activityRequiresEvidence(item, activities) && !isFieldEvidenceActivity(item, activities);
 }

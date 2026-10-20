@@ -8,6 +8,7 @@ import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatClp, formatRatio, registeredBudgetClp } from "@/lib/evm";
 import { computeLiveEvm } from "@/lib/evm-project";
+import { blockingActivityIds } from "@/lib/quality";
 import { scheduleUnlocked } from "@/lib/kickoff";
 import {
   ELEMENT_KIND_LABELS,
@@ -16,6 +17,7 @@ import {
   hasScheduleDeviation,
   rolledProgress,
   scheduleGridFromActivities,
+  scheduleRoots,
   shiftTemplateRows,
 } from "@/lib/schedule-csv";
 import {
@@ -56,7 +58,7 @@ function kindBadgeClass(kind: ScheduleElementKind) {
 }
 
 export function GanttView() {
-  const { project, role, gantt, reports, addGanttActivity, updateGanttActivity, importSchedule, canOperate } =
+  const { project, role, gantt, reports, nonconformities, addGanttActivity, updateGanttActivity, importSchedule, canOperate } =
     useOrg();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<GanttActivity | null>(null);
@@ -68,10 +70,14 @@ export function GanttView() {
   const example = project.scheduleExample && activities.length > 0;
   const budgetClp = registeredBudgetClp(project);
   const waitingBudget = project.id !== "prj-pending" && budgetClp <= 0;
-  const roots = activities.filter((item) => !item.parentCode);
+  const roots = scheduleRoots(activities);
+  const held = useMemo(
+    () => blockingActivityIds(nonconformities.filter((item) => item.projectId === project.id)),
+    [nonconformities, project.id],
+  );
   const live = useMemo(
-    () => computeLiveEvm(project, activities, reports, role),
-    [project, activities, reports, role],
+    () => computeLiveEvm(project, activities, reports, role, undefined, held),
+    [project, activities, reports, role, held],
   );
 
   function scheduleMeta() {
@@ -337,15 +343,17 @@ export function GanttView() {
         <p className="mt-2">
           El Excel trae dos hojas: Instrucciones y Cronograma. Columnas: Código EDT, EDT padre, Tipo de
           elemento, Fase, Nombre, fechas, Responsable, Presupuesto planificado (CLP), Inspección en
-          terreno (Sí/No). El avance del paquete se calcula con evidencia validada.
+          terreno (Sí/No). En el primer nivel deja EDT padre vacío, no pongas un guion. El avance del
+          paquete se calcula con evidencia validada.
         </p>
       </details>
       <p className="hidden text-xs text-slate-500 md:block">
         El Excel trae dos hojas: Instrucciones (nombre del proyecto, plazo y reglas) y Cronograma (las
         partidas). También puedes bajar dos libros aparte y subir solo el del cronograma. Columnas:
         Código EDT, EDT padre, Tipo de elemento, Fase, Nombre, fechas, Responsable, Presupuesto
-        planificado (CLP), Inspección en terreno (Sí/No). El avance del paquete se calcula con evidencia
-        validada. Un hito usa la misma fecha de inicio y término.
+        planificado (CLP), Inspección en terreno (Sí/No). En el primer nivel deja EDT padre vacío (no
+        pongas “-”). El avance del paquete se calcula con evidencia validada. Un hito usa la misma fecha
+        de inicio y término.
       </p>
 
       <div className="space-y-3 md:hidden">

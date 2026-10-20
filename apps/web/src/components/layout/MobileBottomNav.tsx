@@ -36,6 +36,7 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   "/budget-review": CircleDollarSign,
   "/budget-approval": CircleDollarSign,
   "/evidence": ImageIcon,
+  "/calidad": ClipboardList,
   "/cuts": LayoutDashboard,
   "/tenant": Building2,
   "/areas": Building2,
@@ -45,6 +46,7 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { nav } = useOrg();
+  if (pathname.startsWith("/cliente")) return null;
   const items = [...nav]
     .filter((item) => item.mobile != null)
     .sort((a, b) => (a.mobile ?? 99) - (b.mobile ?? 99))

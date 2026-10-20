@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
 import { isFieldEvidenceActivity } from "@/lib/schedule-csv";
 
 function EvidenceReviewView() {
-  const { project, gantt, reports, users, reviewEvidence, canOperate } = useOrg();
+  const { project, gantt, reports, users, reviewEvidence, canOperate, isIndividualMode } = useOrg();
   const canReview = canOperate("evidence:approve");
   const queue = reports.filter((item) => item.projectId === project.id);
   const activities = gantt.filter((item) => item.projectId === project.id);
@@ -17,8 +18,14 @@ function EvidenceReviewView() {
         <p className="text-xs uppercase tracking-wide text-slate-500">Validación de avance</p>
         <h1 className="text-2xl font-semibold">Evidencias</h1>
         <p className="max-w-2xl text-sm text-slate-600">
-          El gestor valida fotos de terreno y documentos de escritorio. Sin esa validación, el avance no
-          cuenta en el paquete de trabajo ni en el valor ganado.
+          {isIndividualMode
+            ? "En modo independiente el avance se da por válido al registrarlo en Avance. Esta cola queda para el historial; no hay un gestor aparte que tenga que aprobar."
+            : "El gestor valida fotos de terreno y documentos de escritorio. Sin esa validación, el avance no cuenta en el paquete de trabajo ni en el valor ganado."}{" "}
+          La revisión del trabajo y las observaciones que frenan el valor ganado están en{" "}
+          <Link href="/calidad" className="underline">
+            Calidad
+          </Link>
+          .
         </p>
       </div>
 

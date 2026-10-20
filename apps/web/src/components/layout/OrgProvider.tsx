@@ -15,7 +15,7 @@ import {
 } from "@/lib/coverage";
 import { canOperateAs, coveringRoles, handedRoles } from "@/lib/handover";
 import { canExecute } from "@/lib/raci";
-import { defaultScheduleActivities, normalizeGanttActivity, scaleActivitiesToBudget } from "@/lib/schedule-csv";
+import { defaultScheduleActivities, isFieldEvidenceActivity, leafDescendants, normalizeGanttActivity, scaleActivitiesToBudget } from "@/lib/schedule-csv";
 import { registeredBudgetClp } from "@/lib/evm";
 import {
   ACCOUNT_STORAGE_KEY,
@@ -45,6 +45,7 @@ import {
   normalizeWorkBookMeta,
   workBookEntryReady,
 } from "@/lib/work-book";
+import { qualityTemplate } from "@/lib/quality";
 import type {
   AtomicPermission,
   Client,
@@ -57,6 +58,10 @@ import type {
   PlatformComponentId,
   ProgressReport,
   Project,
+  QualityCheck,
+  QualityGeo,
+  QualityItemResult,
+  Nonconformity,
   ProjectAssignment,
   ProjectKickoff,
   SetupPhase,
@@ -64,6 +69,7 @@ import type {
   Tenant,
   TenantUser,
   UserRole,
+  WorkBookBoardStatus,
   WorkBookEntry,
   WorkBookKind,
   WorkBookMeta,
@@ -127,6 +133,8 @@ interface OrgContextValue {
   reports: ProgressReport[];
   workBook: WorkBookEntry[];
   workBookMetas: WorkBookMeta[];
+  qualityChecks: QualityCheck[];
+  nonconformities: Nonconformity[];
   projectId: string;
   project: Project;
   sessionUserId: string;
@@ -172,6 +180,11 @@ interface OrgContextValue {
     >,
   ) => string;
   addClient: (input: { name: string; rut: string; contactName?: string; contactEmail?: string }) => string;
+  updateClient: (
+    clientId: string,
+    input: { name: string; rut: string; contactName?: string; contactEmail?: string },
+  ) => void;
+  discardIncompleteClient: (clientId: string) => boolean;
   addClientProject: (
     clientId: string,
     input: { name: string; code: string; startDate: string; finishDate: string; proposedBac: number },
@@ -215,9 +228,11 @@ interface OrgContextValue {
     taskId: string;
     physicalPercent: number;
     actualCost: number;
-    evidenceName: string;
+    evidenceName?: string;
     note?: string;
   }) => boolean;
+  completeWorkPackage: (activityId: string) => number;
+  setWorkBookBoardStatus: (id: string, status: WorkBookBoardStatus) => void;
   addWorkBookEntry: (input: {
     kind: WorkBookKind;
     body: string;
@@ -239,6 +254,14 @@ interface OrgContextValue {
   saveWorkBookMeta: (projectId: string, patch: Partial<WorkBookMeta>) => void;
   workBookMetaFor: (projectId: string) => WorkBookMeta;
   reviewEvidence: (reportId: string, status: Extract<EvidenceStatus, "validated" | "rejected">) => void;
+  applyQualityTemplate: (activityId: string, templateId: string) => boolean;
+  recordQualityItem: (
+    checkId: string,
+    itemId: string,
+    result: Exclude<QualityItemResult, "pending">,
+    extra: { note?: string; evidenceName?: string; gps?: QualityGeo; dueOn?: string },
+  ) => boolean;
+  closeNonconformity: (id: string, input: { note: string; evidenceName?: string }) => boolean;
   identifyRepresentative: (payload: RegisterPayload) => CompanyRegisterResult;
   completeRegister: (payload: CompanyPayload) => CompanyRegisterResult;
   beginRegistration: (options?: { replaceExisting?: boolean }) => NewOrgResult;
@@ -583,6 +606,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState<ProgressReport[]>([]);
   const [workBook, setWorkBook] = useState<WorkBookEntry[]>([]);
   const [workBookMetas, setWorkBookMetas] = useState<WorkBookMeta[]>([]);
+  const [qualityChecks, setQualityChecks] = useState<QualityCheck[]>([]);
+  const [nonconformities, setNonconformities] = useState<Nonconformity[]>([]);
   const [sessionUserId, setSessionUserIdState] = useState(founderDraft.id);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
@@ -666,6 +691,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
               ),
             );
           }
+          if (Array.isArray(snap.qualityChecks)) setQualityChecks(snap.qualityChecks);
+          if (Array.isArray(snap.nonconformities)) setNonconformities(snap.nonconformities);
           if (snap.profiles?.length) setProfiles(applyOwnerCoverage(snap.profiles));
           if (snap.areas?.length) setAreas(snap.areas.map((item: OrgArea) => normalizeArea(item)));
           if (snap.sessionUserId) setSessionUserIdState(snap.sessionUserId);
@@ -738,6 +765,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       reports,
       workBook,
       workBookMetas,
+      qualityChecks,
+      nonconformities,
       profiles,
       areas,
       sessionUserId,
@@ -768,6 +797,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     reports,
     workBook,
     workBookMetas,
+    qualityChecks,
+    nonconformities,
     profiles,
     areas,
     sessionUserId,
@@ -794,6 +825,10 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     if (role !== "owner" && canExecute(role, "evidence:upload")) {
       ids.push("progress");
       ids.push("workbook");
+      ids.push("quality");
+    }
+    if (role !== "owner" && canExecute(role, "evidence:approve") && !ids.includes("quality")) {
+      ids.push("quality");
     }
     const ordered = ["dashboard" as const, ...ids.filter((id) => id !== "dashboard")];
     if (!individual) return ordered;
@@ -895,6 +930,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setReports([]);
         setWorkBook([]);
         setWorkBookMetas([]);
+        setQualityChecks([]);
+        setNonconformities([]);
         setSessionUserIdState(founderDraft.id);
         setProjectIdState("");
         localStorage.removeItem(SETUP_STORAGE_KEY);
@@ -931,6 +968,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       reports,
       workBook,
       workBookMetas,
+      qualityChecks,
+      nonconformities,
       projectId: project.id,
       project,
       sessionUserId: sessionUser.id,
@@ -1241,6 +1280,26 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           },
         ]);
         return id;
+      },
+      updateClient(clientId, input) {
+        setClients((current) =>
+          current.map((item) =>
+            item.id === clientId
+              ? {
+                  ...item,
+                  name: input.name.trim(),
+                  rut: input.rut.trim(),
+                  contactName: input.contactName?.trim() ?? "",
+                  contactEmail: input.contactEmail?.trim().toLowerCase() ?? "",
+                }
+              : item,
+          ),
+        );
+      },
+      discardIncompleteClient(clientId) {
+        if (projects.some((item) => item.clientId === clientId)) return false;
+        setClients((current) => current.filter((item) => item.id !== clientId));
+        return true;
       },
       addClientProject(clientId, input) {
         const id = `prj-${Date.now()}`;
@@ -1807,7 +1866,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       },
       addProgressReport(input) {
         const activity = gantt.find((item) => item.id === input.taskId && item.projectId === project.id);
-        if (!activity || !input.evidenceName) return false;
+        if (!activity) return false;
+        const projectRows = gantt.filter((item) => item.projectId === project.id);
+        const needsFile = isFieldEvidenceActivity(activity, projectRows) && !individual;
+        if (needsFile && !input.evidenceName) return false;
+        const validated = individual || !isFieldEvidenceActivity(activity, projectRows);
         const report: ProgressReport = {
           id: `pr-${Date.now()}`,
           projectId: project.id,
@@ -1816,9 +1879,9 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           period: new Date().toISOString().slice(0, 10),
           physicalPercent: input.physicalPercent,
           actualCost: input.actualCost,
-          evidenceId: `ev-${Date.now()}`,
-          evidenceName: input.evidenceName,
-          evidenceStatus: "uploaded",
+          evidenceId: input.evidenceName ? `ev-${Date.now()}` : null,
+          evidenceName: input.evidenceName || (individual ? "Registro de avance (autocontrol)" : "Registro de avance"),
+          evidenceStatus: validated ? "validated" : "uploaded",
           clientEventId: `evt-${Date.now()}`,
           note: input.note,
         };
@@ -1827,7 +1890,69 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           ...current,
           entryFromProgressReport(report, activity, nextFolio(current, project.id)),
         ]);
+        if (validated) {
+          setGantt((current) =>
+            current.map((item) =>
+              item.id === activity.id
+                ? { ...item, progress: Math.max(item.progress, Math.round(input.physicalPercent * 100)) }
+                : item,
+            ),
+          );
+        }
         return true;
+      },
+      completeWorkPackage(activityId) {
+        const projectRows = gantt.filter((item) => item.projectId === project.id);
+        const target = projectRows.find((item) => item.id === activityId);
+        if (!target) return 0;
+        const pending = leafDescendants(target, projectRows).filter((item) => item.progress < 100);
+        if (!pending.length) return 0;
+        const stamp = Date.now();
+        const added: ProgressReport[] = pending.map((leaf, index) => ({
+          id: `pr-${stamp}-${index}`,
+          projectId: project.id,
+          taskId: leaf.id,
+          reportedBy: sessionUser.id,
+          period: new Date().toISOString().slice(0, 10),
+          physicalPercent: 1,
+          actualCost: 0,
+          evidenceId: `ev-${stamp}-${index}`,
+          evidenceName: `Cierre de paquete ${target.code || target.name}`,
+          evidenceStatus: "validated",
+          clientEventId: `evt-${stamp}-${index}`,
+          note: `Paquete ${target.code || target.name} cerrado en autocontrol.`,
+        }));
+        const doneIds = new Set(pending.map((item) => item.id));
+        setReports((current) => [...current, ...added]);
+        setGantt((current) =>
+          current.map((item) => (doneIds.has(item.id) ? { ...item, progress: 100 } : item)),
+        );
+        setWorkBook((current) => {
+          const extra: typeof current = [];
+          added.forEach((report, index) => {
+            extra.push(entryFromProgressReport(report, pending[index], nextFolio([...current, ...extra], project.id)));
+          });
+          return [...current, ...extra];
+        });
+        return pending.length;
+      },
+      setWorkBookBoardStatus(id, status) {
+        const entry = workBook.find((item) => item.id === id);
+        if (!entry || entry.boardStatus === status) return;
+        setWorkBook((current) => current.map((item) => (item.id === id ? { ...item, boardStatus: status } : item)));
+        if (!individual || status !== "closed" || !entry.sourceReportId) return;
+        const report = reports.find((item) => item.id === entry.sourceReportId);
+        if (!report || report.evidenceStatus === "validated") return;
+        setReports((current) =>
+          current.map((item) => (item.id === report.id ? { ...item, evidenceStatus: "validated" } : item)),
+        );
+        setGantt((current) =>
+          current.map((item) =>
+            item.id === report.taskId
+              ? { ...item, progress: Math.max(item.progress, Math.round(report.physicalPercent * 100)) }
+              : item,
+          ),
+        );
       },
       addWorkBookEntry(input) {
         const draft = {
@@ -1892,6 +2017,135 @@ export function OrgProvider({ children }: { children: ReactNode }) {
               : item,
           ),
         );
+      },
+      applyQualityTemplate(activityId, templateId) {
+        const template = qualityTemplate(templateId);
+        const activity = gantt.find((item) => item.id === activityId && item.projectId === project.id);
+        if (!template || !activity) return false;
+        if (
+          qualityChecks.some(
+            (item) =>
+              item.projectId === project.id && item.activityId === activityId && item.templateId === templateId,
+          )
+        ) {
+          return false;
+        }
+        const stamp = Date.now();
+        const check: QualityCheck = {
+          id: `qc-${stamp}`,
+          projectId: project.id,
+          activityId,
+          templateId: template.id,
+          templateName: template.name,
+          family: template.family,
+          updatedAt: new Date().toISOString(),
+          items: template.items.map((item, index) => ({
+            id: `qi-${stamp}-${index}`,
+            templateItemId: item.id,
+            text: item.text,
+            blocking: item.blocking,
+            result: "pending",
+            note: "",
+            evidenceName: "",
+            recordedAt: "",
+            recordedBy: "",
+          })),
+        };
+        setQualityChecks((current) => [...current, check]);
+        return true;
+      },
+      recordQualityItem(checkId, itemId, result, extra) {
+        const check = qualityChecks.find((item) => item.id === checkId && item.projectId === project.id);
+        const source = check?.items.find((item) => item.id === itemId);
+        if (!check || !source) return false;
+        const now = new Date().toISOString();
+        setQualityChecks((current) =>
+          current.map((item) => {
+            if (item.id !== checkId) return item;
+            return {
+              ...item,
+              updatedAt: now,
+              items: item.items.map((row) =>
+                row.id === itemId
+                  ? {
+                      ...row,
+                      result,
+                      note: extra.note?.trim() ?? row.note,
+                      evidenceName: extra.evidenceName?.trim() ?? row.evidenceName,
+                      gps: extra.gps ?? row.gps,
+                      recordedAt: now,
+                      recordedBy: sessionUser.id,
+                    }
+                  : row,
+              ),
+            };
+          }),
+        );
+        if (result === "fail" && source.blocking) {
+          const detail = extra.note?.trim() || source.text;
+          setNonconformities((current) => {
+            const open = current.find((item) => item.itemId === itemId && item.status !== "closed");
+            if (open) {
+              return current.map((item) =>
+                item.id === open.id
+                  ? {
+                      ...item,
+                      detail,
+                      dueOn: extra.dueOn || item.dueOn,
+                      ownerUserId: sessionUser.id,
+                      decisions: [
+                        ...item.decisions,
+                        { at: now, by: sessionUser.id, action: "Se actualizó la observación." },
+                      ],
+                    }
+                  : item,
+              );
+            }
+            const created: Nonconformity = {
+              id: `nc-${Date.now()}`,
+              projectId: project.id,
+              activityId: check.activityId,
+              checkId,
+              itemId,
+              title: source.text,
+              detail,
+              blocking: true,
+              ownerUserId: sessionUser.id,
+              dueOn: extra.dueOn || now.slice(0, 10),
+              status: "open",
+              openedAt: now,
+              openedBy: sessionUser.id,
+              closedAt: null,
+              closeNote: "",
+              closeEvidenceName: "",
+              decisions: [{ at: now, by: sessionUser.id, action: "Abierta desde la revisión." }],
+            };
+            return [...current, created];
+          });
+        }
+        return true;
+      },
+      closeNonconformity(id, input) {
+        const note = input.note.trim();
+        if (note.length < 8 && !input.evidenceName?.trim()) return false;
+        const target = nonconformities.find((item) => item.id === id && item.projectId === project.id);
+        if (!target || target.status === "closed") return false;
+        const now = new Date().toISOString();
+        setNonconformities((current) =>
+          current.map((item) =>
+            item.id !== id
+              ? item
+              : {
+                  ...item,
+                  status: "closed",
+                  closedAt: now,
+                  closeNote: note,
+                  closeEvidenceName: input.evidenceName?.trim() ?? "",
+                  decisions: [...item.decisions, { at: now, by: sessionUser.id, action: "Cerrada con respaldo." }],
+                },
+          ),
+        );
+        return true;
       },
       signInWithSso(provider, name, email) {
         return commitSignIn(provider, name, email);
@@ -2392,6 +2646,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setReports([]);
         setWorkBook([]);
         setWorkBookMetas([]);
+        setQualityChecks([]);
+        setNonconformities([]);
         setSessionUserIdState(founderDraft.id);
         setProjectIdState("");
         localStorage.removeItem(SETUP_STORAGE_KEY);
@@ -2443,6 +2699,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       reports,
       workBook,
       workBookMetas,
+      qualityChecks,
+      nonconformities,
       project,
       sessionUser,
       role,

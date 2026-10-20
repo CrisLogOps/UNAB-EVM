@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Menu, UserRound, X } from "lucide-react";
 import { OpenEvmMark } from "@/components/brand/OpenEvmMark";
 import { BoundedSelect } from "@/components/forms/BoundedSelect";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
-import { ROLE_LABELS, NAV_GROUP_LABELS } from "@/lib/constants";
+import { ROLE_LABELS, NAV_GROUP_LABELS, type NavGroup } from "@/lib/constants";
 import { personLabel } from "@/lib/handover";
 import { OPERATING_MODE_LABEL, resolveOperatingMode } from "@/lib/operating-mode";
 import { HOME_HREF } from "@/lib/startup-flow";
@@ -23,6 +23,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { tenant } = useRoleContext();
   const {
+    clients,
     visibleProjects,
     projectId,
     setProjectId,
@@ -35,9 +36,29 @@ export function AppLayout({ children }: { children: ReactNode }) {
     identity,
     signOut,
   } = useOrg();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
-  const currentProject = visibleProjects.find((item) => item.id === projectId);
+  const activeGroup = nav.find((item) => item.href === pathname)?.group ?? null;
+  const [openGroups, setOpenGroups] = useState<NavGroup[]>(activeGroup ? [activeGroup] : []);
+  const menuReady = useRef(Boolean(activeGroup));
+  if (!menuReady.current && activeGroup) {
+    menuReady.current = true;
+    setOpenGroups((groups) => (groups.includes(activeGroup) ? groups : [activeGroup, ...groups]));
+  }
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (pathname !== menuPath) {
+    setMenuPath(pathname);
+    if (activeGroup && !openGroups.includes(activeGroup)) {
+      setOpenGroups((groups) => [...groups, activeGroup]);
+    }
+  }
+  const previewClientId = pathname.startsWith("/cliente") ? (searchParams.get("id") ?? "") : "";
+  const previewClient = clients.find((item) => item.id === previewClientId);
+  const headerProjects = previewClient
+    ? visibleProjects.filter((item) => item.clientId === previewClient.id && item.id !== "prj-pending")
+    : visibleProjects;
+  const currentProject = headerProjects.find((item) => item.id === projectId) ?? headerProjects[0];
   const mode = resolveOperatingMode(tenant);
 
   return (
@@ -64,34 +85,47 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-4">
-          {(Object.keys(NAV_GROUP_LABELS) as Array<keyof typeof NAV_GROUP_LABELS>).map((group) => {
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {(Object.keys(NAV_GROUP_LABELS) as NavGroup[]).map((group) => {
             const items = nav.filter((item) => item.group === group);
             if (!items.length) return null;
+            const expanded = openGroups.includes(group);
             return (
               <div key={group}>
-                <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wider text-white/45">
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() =>
+                    setOpenGroups((current) =>
+                      current.includes(group) ? current.filter((item) => item !== group) : [...current, group],
+                    )
+                  }
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wider text-white/70 hover:bg-white/10"
+                >
                   {NAV_GROUP_LABELS[group]}
-                </p>
-                <div className="space-y-1">
-                  {items.map((item) => {
-                    const active = pathname === item.href;
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setOpen(false)}
-                        className={`block rounded-lg px-3 py-2.5 text-sm ${
-                          active
-                            ? "bg-[var(--accent)] font-medium text-[var(--brand-dark)]"
-                            : "text-white/85 hover:bg-white/10"
-                        }`}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition ${expanded ? "rotate-180" : ""}`} />
+                </button>
+                {expanded ? (
+                  <div className="space-y-1 pb-2">
+                    {items.map((item) => {
+                      const active = pathname === item.href;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setOpen(false)}
+                          className={`block rounded-lg py-2 pl-6 pr-3 text-sm ${
+                            active
+                              ? "bg-[var(--accent)] font-medium text-[var(--brand-dark)]"
+                              : "text-white/85 hover:bg-white/10"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             );
           })}
@@ -119,7 +153,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <div className="flex min-w-0 max-w-[42vw] items-center gap-1.5 rounded-full bg-[var(--brand)] px-2 py-1 text-white sm:max-w-none sm:gap-2 sm:px-2.5">
                 <UserRound className="h-4 w-4 shrink-0" />
                 <span className="truncate text-xs sm:text-sm">
-                  {identity?.name || ROLE_LABELS[role]}
+                  {previewClient ? previewClient.name : identity?.name || ROLE_LABELS[role]}
                 </span>
               </div>
               <button
@@ -146,8 +180,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 {currentProject?.name || "Sin proyecto"}
               </span>
               <span className="block truncate text-[11px] text-zinc-500">
-                {tenant.name || "Empresa"}
-                {mode ? ` · ${OPERATING_MODE_LABEL[mode]}` : ""}
+                {previewClient
+                  ? "Vista del cliente"
+                  : `${tenant.name || "Empresa"}${mode ? ` · ${OPERATING_MODE_LABEL[mode]}` : ""}`}
               </span>
             </span>
             <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-500 transition ${contextOpen ? "rotate-180" : ""}`} />
@@ -171,17 +206,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Proyecto</span>
               <BoundedSelect
                 aria-label="Proyecto actual"
-                value={projectId}
-                onChange={setProjectId}
+                value={headerProjects.some((item) => item.id === projectId) ? projectId : (headerProjects[0]?.id ?? "")}
+                onChange={(next) => {
+                  setProjectId(next);
+                  if (previewClient) router.push(`/cliente?id=${previewClient.id}&obra=${next}`);
+                }}
                 options={
-                  visibleProjects.length
-                    ? visibleProjects.map((item) => ({ value: item.id, label: item.name }))
-                    : [{ value: "", label: "Sin proyectos asignados" }]
+                  headerProjects.length
+                    ? headerProjects.map((item) => ({ value: item.id, label: item.name }))
+                    : [{ value: "", label: previewClient ? "Sin obras de este cliente" : "Sin proyectos asignados" }]
                 }
               />
             </div>
-            <OperatingModeSwitch />
-            {isIndividualMode ? null : (
+            {previewClient ? null : <OperatingModeSwitch />}
+            {isIndividualMode || previewClient ? null : (
             <div className="block min-w-0 sm:col-span-2 xl:col-span-1">
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Ver como</span>
               <BoundedSelect

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatClp, parseClpInput, registeredBudgetClp } from "@/lib/evm";
@@ -25,10 +25,12 @@ export function ClientKickoffAssistant({
   onStarted,
   onCancel,
   resumeProjectId,
+  resumeClientId,
 }: {
   onStarted: (projectId: string) => void;
   onCancel?: () => void;
   resumeProjectId?: string;
+  resumeClientId?: string;
 }) {
   const {
     clients,
@@ -36,6 +38,7 @@ export function ClientKickoffAssistant({
     areas,
     users,
     addClient,
+    updateClient,
     addClientProject,
     updateClientProject,
     saveKickoff,
@@ -51,7 +54,8 @@ export function ClientKickoffAssistant({
   } = useOrg();
 
   const resumed = resumeProjectId ? projects.find((item) => item.id === resumeProjectId) : undefined;
-  const resumedClient = resumed ? clients.find((item) => item.id === resumed.clientId) : undefined;
+  const clientOnly = !resumed && resumeClientId ? clients.find((item) => item.id === resumeClientId) : undefined;
+  const resumedClient = resumed ? clients.find((item) => item.id === resumed.clientId) : clientOnly;
   const resumedKickoff = resumeProjectId ? kickoffFor(resumeProjectId) : undefined;
 
   const initialStep: Step = resumed
@@ -60,11 +64,13 @@ export function ClientKickoffAssistant({
       : resumed.kickoffPhase === "internal_done" || resumed.kickoffPhase === "client_done"
         ? "clientKickoff"
         : "internal"
-    : "client";
+    : clientOnly
+      ? "project"
+      : "client";
 
   const [step, setStep] = useState<Step>(initialStep);
   const [error, setError] = useState<string | null>(null);
-  const [clientId, setClientId] = useState(resumed?.clientId ?? "");
+  const [clientId, setClientId] = useState(resumed?.clientId ?? clientOnly?.id ?? "");
   const [projectId, setProjectId] = useState(resumed?.id ?? "");
   const [clientName, setClientName] = useState(resumedClient?.name ?? "");
   const [clientRut, setClientRut] = useState(resumedClient?.rut ?? "");
@@ -79,6 +85,7 @@ export function ClientKickoffAssistant({
     return amount > 0 ? String(amount) : "";
   });
   const [draft, setDraft] = useState<Partial<ProjectKickoff>>(() => seedDraft(resumedKickoff, resumed, areas));
+  const pendingClientId = useRef("");
 
   const currentProject: Project | undefined = projects.find((item) => item.id === projectId);
   const currentClient: Client | undefined = clients.find((item) => item.id === clientId);
@@ -149,24 +156,42 @@ export function ClientKickoffAssistant({
       setError("La razón social y el RUT del cliente son obligatorios.");
       return;
     }
-    const id =
-      clientId ||
-      addClient({
-        name: clientName,
-        rut: clientRut,
-        contactName,
-        contactEmail,
-      });
-    setClientId(id);
+    const payload = {
+      name: clientName,
+      rut: clientRut,
+      contactName,
+      contactEmail,
+    };
+    if (clientId || pendingClientId.current) {
+      updateClient(clientId || pendingClientId.current, payload);
+    } else {
+      const id = addClient(payload);
+      pendingClientId.current = id;
+      setClientId(id);
+    }
     setError(null);
     setStep("project");
   }
 
-  function ensureProject() {
-    if (!clientId) {
-      setError("Completa el cliente antes de crear el proyecto.");
+  function resolveClientId() {
+    if (clientId || pendingClientId.current) return clientId || pendingClientId.current;
+    if (!clientName.trim() || !clientRut.trim()) {
+      setError("La razón social y el RUT del cliente son obligatorios.");
+      setStep("client");
       return "";
     }
+    const id = addClient({
+      name: clientName,
+      rut: clientRut,
+      contactName,
+      contactEmail,
+    });
+    pendingClientId.current = id;
+    setClientId(id);
+    return id;
+  }
+
+  function ensureProject() {
     if (!projectName.trim() || !projectCode.trim() || !startDate || !finishDate) {
       setError("Completa nombre, código, inicio y término del proyecto.");
       return "";
@@ -181,6 +206,8 @@ export function ClientKickoffAssistant({
       setStep("project");
       return "";
     }
+    const ownerId = resolveClientId();
+    if (!ownerId) return "";
     if (projectId) {
       const ok = updateClientProject(projectId, {
         name: projectName,
@@ -195,7 +222,7 @@ export function ClientKickoffAssistant({
       }
       return projectId;
     }
-    const id = addClientProject(clientId, {
+    const id = addClientProject(ownerId, {
       name: projectName,
       code: projectCode,
       startDate,
@@ -394,10 +421,10 @@ export function ClientKickoffAssistant({
         })}
       </ol>
 
-      {currentClient && step !== "client" ? (
+      {step !== "client" && (currentClient || clientName.trim()) ? (
         <p className="text-sm text-slate-600">
-          Cliente: <strong>{currentClient.name}</strong>
-          {currentClient.rut ? ` · RUT ${currentClient.rut}` : ""}
+          Cliente: <strong>{currentClient?.name || clientName.trim()}</strong>
+          {(currentClient?.rut || clientRut.trim()) ? ` · RUT ${currentClient?.rut || clientRut.trim()}` : ""}
           {currentProject ? ` · ${currentProject.name}` : ""}
         </p>
       ) : null}

@@ -17,6 +17,11 @@
 | [license-academic.md](./license-academic.md) | **Licencia académica** — checklist; foco MVP, OSI diferido |
 | [flujo-fases-f1-f7.md](./flujo-fases-f1-f7.md) | **Flujo válido del proyecto** — 56 pasos Rev3 (PMBOK adaptado), gates y qué se puede probar |
 | [2026-09-13_Flujo_Proceso_Proyecto_Adjudicacion_a_Garantias_Rev3.xlsx](./2026-09-13_Flujo_Proceso_Proyecto_Adjudicacion_a_Garantias_Rev3.xlsx) | Libro canónico (Resumen_Fases + Flujo_Detallado) |
+| [esquema-validacion-pmbok-iso-datos.md](./esquema-validacion-pmbok-iso-datos.md) | **Validación por capas** — ISO 9001, ágil diario y datos personales sobre el Rev3 |
+| [2026-10-20_validacion-funcionalidades.csv](./2026-10-20_validacion-funcionalidades.csv) | **Validación de funcionalidades** — una fila por función, con el flujo y el dato en la misma línea |
+| [2026-10-20_prompt-validacion-funcionalidades.md](./2026-10-20_prompt-validacion-funcionalidades.md) | Prompt para pasar ese CSV a Gemini |
+| [2026-10-20_base-gemini-validacion-modos.md](./2026-10-20_base-gemini-validacion-modos.md) | Respaldo de hechos del barrido por fases y modos |
+| [2026-10-20_Esquema_Validacion_PMBOK_ISO9001_Datos.xlsx](./2026-10-20_Esquema_Validacion_PMBOK_ISO9001_Datos.xlsx) | Matriz para confirmar cada fase, inventario de datos y bitácora |
 | [local-mvp.md](./local-mvp.md) | Arranque local (Docker + API + Next) y SQL de prueba para Supabase |
 | [despliegue-railway.md](./despliegue-railway.md) | **GitHub + Railway** — por qué no Pages/Netlify solo; cómo publicar para trabajar con un compañero |
 | [requisitos-minimos-servidor-mvp.md](./requisitos-minimos-servidor-mvp.md) | **Ficha para pedir un servidor** — arquitectura MVP, lenguajes, Postgres, sizing y checklist de validación |

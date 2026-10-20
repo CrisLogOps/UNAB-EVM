@@ -8,7 +8,7 @@ export const NAV_BY_ROLE: Record<UserRole, { href: string; label: string; group:
     { href: "/profiles", label: "Puestos", group: "personas" },
     { href: "/teams", label: "En la obra", group: "personas" },
     { href: "/areas", label: "Áreas", group: "personas" },
-    { href: "/tenant", label: "Empresa", group: "empresa" },
+    { href: "/tenant", label: "Empresa", group: "hoy" },
     { href: "/budget-approval", label: "Aprobar $", group: "dinero" },
   ],
   pmo: [

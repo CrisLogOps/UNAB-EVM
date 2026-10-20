@@ -16,6 +16,7 @@ import {
   type ActivityEvmRow,
   type ScheduleRunStatus,
 } from "@/lib/evm-project";
+import { blockingActivityIds } from "@/lib/quality";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { ScheduleElementKind } from "@/lib/types";
 import { StartupChecklist } from "@/components/onboarding/StartupChecklist";
@@ -71,16 +72,20 @@ const EVIDENCE_FILTERS: { value: string; label: string }[] = [
 ];
 
 export function DashboardView() {
-  const { project, role, teamForProject, assignments, sessionUser, gantt, reports, canOperate, kickoffFor, isIndividualMode } = useOrg();
+  const { project, role, teamForProject, assignments, sessionUser, gantt, reports, nonconformities, canOperate, kickoffFor, isIndividualMode } = useOrg();
   const router = useRouter();
   const team = teamForProject(project.id);
   const activities = useMemo(
     () => gantt.filter((item) => item.projectId === project.id),
     [gantt, project.id],
   );
+  const held = useMemo(
+    () => blockingActivityIds(nonconformities.filter((item) => item.projectId === project.id)),
+    [nonconformities, project.id],
+  );
   const live = useMemo(
-    () => computeLiveEvm(project, activities, reports, role),
-    [project, activities, reports, role],
+    () => computeLiveEvm(project, activities, reports, role, undefined, held),
+    [project, activities, reports, role, held],
   );
   const selected = live.metrics;
   const fieldView = role === "field" || role === "subcontractor";
@@ -177,7 +182,15 @@ export function DashboardView() {
     {
       key: "ev",
       header: "% ganado (EV)",
-      render: (row) => percentLabel(row.earnedPercent),
+      render: (row) =>
+        held.has(row.id) ? (
+          <span>
+            <span className="block">{percentLabel(row.earnedPercent)}</span>
+            <span className="mt-0.5 block text-[11px] font-medium text-amber-800">No suma valor ganado</span>
+          </span>
+        ) : (
+          percentLabel(row.earnedPercent)
+        ),
     },
     {
       key: "money",
@@ -265,6 +278,17 @@ export function DashboardView() {
             cuenta con evidencia validada (foto de terreno o documento de escritorio).
           </p>
 
+          {held.size ? (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              {held.size === 1
+                ? "Un trabajo no suma valor ganado mientras su observación siga abierta."
+                : `${held.size} trabajos no suman valor ganado mientras su observación siga abierta.`}{" "}
+              <Link href="/calidad" className="underline">
+                Revisar
+              </Link>
+            </p>
+          ) : null}
+
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <KpiCard
               label="Presupuesto inicial"
@@ -281,11 +305,15 @@ export function DashboardView() {
             <KpiCard
               label="Valor ganado (EV)"
               value={formatMeasure(selected.ev, live.moneyMode)}
-              status={selected.evidenceLocked ? "red" : selected.ev >= selected.pv ? "green" : "yellow"}
+              status={held.size || selected.evidenceLocked ? "red" : selected.ev >= selected.pv ? "green" : "yellow"}
               hint={
-                selected.evidenceLocked
-                  ? "Hay evidencias aún sin validar"
-                  : `${percentLabel(live.physicalPercent)} del plan de control`
+                held.size
+                  ? held.size === 1
+                    ? "1 trabajo con una observación abierta"
+                    : `${held.size} trabajos con una observación abierta`
+                  : selected.evidenceLocked
+                    ? "Hay evidencias aún sin validar"
+                    : `${percentLabel(live.physicalPercent)} del plan de control`
               }
               locked={selected.evidenceLocked}
             />
@@ -445,7 +473,7 @@ export function DashboardView() {
                           {
                             label: "Registrar",
                             variant: "edit",
-                            onClick: () => router.push("/progress"),
+                            onClick: (row) => router.push(`/progress?task=${encodeURIComponent(row.id)}`),
                           },
                         ]
                       : undefined

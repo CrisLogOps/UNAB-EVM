@@ -140,6 +140,7 @@ export function computeLiveEvm(
   reports: ProgressReport[],
   role: UserRole,
   asOf = new Date().toISOString().slice(0, 10),
+  held?: Set<string>,
 ): LiveEvm {
   const scoped = role === "field" || role === "subcontractor";
   const visible = laboresForRole(activities, role);
@@ -149,7 +150,7 @@ export function computeLiveEvm(
 
   const rows: ActivityEvmRow[] = visible.map((item) => {
     const planned = plannedPercent(item.start, item.end, asOf);
-    const earned = rolledProgress(item, activities, projectReports) / 100;
+    const earned = rolledProgress(item, activities, projectReports, new Set(), held) / 100;
     const weight = activityWeight(item);
     return {
       id: item.id,
@@ -167,7 +168,7 @@ export function computeLiveEvm(
       ac: activityAc(projectReports, item.id),
       evidence: latestEvidence(projectReports, item.id),
       requiresFieldEvidence: item.requiresFieldEvidence,
-      requiresEvidence: activityRequiresEvidence(item),
+      requiresEvidence: activityRequiresEvidence(item, activities),
       parentCode: item.parentCode,
     };
   });
@@ -175,7 +176,7 @@ export function computeLiveEvm(
   const bac = !scoped && project.bac > 0 ? project.bac : pool.reduce((sum, item) => sum + activityWeight(item), 0);
   const pv = pool.reduce((sum, item) => sum + activityWeight(item) * plannedPercent(item.start, item.end, asOf), 0);
   const ev = pool.reduce(
-    (sum, item) => sum + activityWeight(item) * (rolledProgress(item, activities, projectReports) / 100),
+      (sum, item) => sum + activityWeight(item) * (rolledProgress(item, activities, projectReports, new Set(), held) / 100),
     0,
   );
   const ac = pool.reduce((sum, item) => sum + activityAc(projectReports, item.id), 0);
