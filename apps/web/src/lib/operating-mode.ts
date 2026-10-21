@@ -54,11 +54,9 @@ export const OPERATING_MODE_LABEL: Record<OperatingMode, string> = {
 
 export type AppChannel = "development" | "staging";
 
-/** Railway y `next start` quedan en staging. `npm run dev` queda en development. */
+/** Staging solo si el build lo declara. Local y el Dev de Alejandro quedan en development. */
 export function appChannel(): AppChannel {
-  const raw = process.env.NEXT_PUBLIC_APP_CHANNEL;
-  if (raw === "staging" || raw === "development") return raw;
-  return process.env.NODE_ENV === "development" ? "development" : "staging";
+  return process.env.NEXT_PUBLIC_APP_CHANNEL === "staging" ? "staging" : "development";
 }
 
 /** En staging el modo colaborativo no ofrece cambiar «Cómo trabajas». */

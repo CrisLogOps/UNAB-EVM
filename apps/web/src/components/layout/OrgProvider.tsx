@@ -8,7 +8,7 @@ import { companySizeForMode, extraCollaborators, filterNavForMode, isIndividualM
 import { DIRECTION_AREA_ID, type AreaDraft } from "@/lib/tenant-setup";
 import { normalizeTenantIntegrations } from "@/lib/tenant-integrations";
 import { emptyKickoff, emptyProposal, normalizeKickoff, commercialDeliveryReady, partiesValidated, areasUserCanReview, coversKickoffRole, canEditSoldExtract, canEditPmNotes, proposalReady, draftFinalProposal, areaReviewValid, individualInternalReady, composeIndividualJudgment, collaborativeInternalReady } from "@/lib/kickoff";
-import { normalizePaymentCut, seedPaymentDates } from "@/lib/payment-cuts";
+import { datesForCadence, normalizePaymentCut, replaceOpenCadenceCuts, seedPaymentDates } from "@/lib/payment-cuts";
 import {
   extraComponentIdsForRole,
   extraPermissionsForRole,
@@ -70,6 +70,7 @@ import type {
   QualityItemResult,
   Nonconformity,
   ProjectAssignment,
+  PaymentCadence,
   PaymentCut,
   ProjectKickoff,
   SetupPhase,
@@ -226,6 +227,10 @@ interface OrgContextValue {
   openClientKickoff: (projectId: string, patch?: Partial<ProjectKickoff>, userId?: string) => boolean;
   confirmClientKickoff: (projectId: string, patch?: Partial<ProjectKickoff>) => boolean;
   addPaymentCut: (projectId: string, dueDate: string, label: string) => boolean;
+  applyPaymentCadence: (
+    projectId: string,
+    cadence: PaymentCadence,
+  ) => { ok: true; count: number } | { ok: false; message: string };
   removePaymentCut: (id: string) => boolean;
   closePaymentCut: (
     id: string,
@@ -1838,7 +1843,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           ]);
         }
         setProjectIdState(projectId);
-        if (kickoff.paymentsAgreed) {
+        const cadence = kickoff.paymentCadence;
+        if (kickoff.paymentsAgreed && cadence) {
+          setPaymentCuts((current) =>
+            replaceOpenCadenceCuts(current, projectId, cadence, kickoff.paymentDates ?? [], "kickoff"),
+          );
+        } else if (kickoff.paymentsAgreed) {
           setPaymentCuts((current) =>
             seedPaymentDates(current, projectId, kickoff.paymentDates ?? [], "kickoff"),
           );
@@ -1857,6 +1867,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             dueDate,
             label: label.trim() || `Estado de pago ${count}`,
             origin: "admin",
+            rule: "",
             note: "",
             frozenAt: null,
             pv: null,
@@ -1866,6 +1877,18 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           },
         ]);
         return true;
+      },
+      applyPaymentCadence(projectId, cadence) {
+        const target = projects.find((item) => item.id === projectId);
+        if (!target?.startDate || !target.finishDate) {
+          return { ok: false, message: "La obra necesita fecha de inicio y de término." };
+        }
+        const dates = datesForCadence(target.startDate, target.finishDate, cadence);
+        if (!dates.length) {
+          return { ok: false, message: "Ese día fijo no cae entre el inicio y el término de la obra." };
+        }
+        setPaymentCuts((current) => replaceOpenCadenceCuts(current, projectId, cadence, dates, "admin"));
+        return { ok: true, count: dates.length };
       },
       removePaymentCut(id) {
         const target = paymentCuts.find((item) => item.id === id);

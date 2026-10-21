@@ -16,13 +16,15 @@ import {
   emptyProposal,
   evaluateInternalGate,
 } from "@/lib/kickoff";
+import { appChannel } from "@/lib/operating-mode";
+import { datesForCadence, PAYMENT_CADENCES } from "@/lib/payment-cuts";
 import { isPdfFile, saveProposalFile, saveScheduleFile } from "@/lib/proposal-file";
 import { downloadBlob, shiftTemplateRows } from "@/lib/schedule-csv";
 import { buildCombinedScheduleFile, parseScheduleUpload } from "@/lib/schedule-workbook";
 import { AntecedentPreview, AntecedentsStep } from "@/components/onboarding/AntecedentsStep";
 import { KickoffAreaPanel } from "@/components/onboarding/KickoffAreaPanel";
 import { IndividualInternalKickoff } from "@/components/onboarding/IndividualInternalKickoff";
-import type { Client, KickoffProposal, OrgArea, Project, ProjectKickoff } from "@/lib/types";
+import type { Client, KickoffProposal, OrgArea, PaymentCadence, Project, ProjectKickoff } from "@/lib/types";
 
 type Step = "client" | "project" | "antecedentes" | "internal" | "clientKickoff";
 
@@ -495,16 +497,36 @@ export function ClientKickoffAssistant({
 
   function submitClientKickoff() {
     if (!projectId) return;
-    const dates = (draft.paymentDates ?? []).map((item) => item.trim()).filter(Boolean);
     if (draft.paymentsAgreed == null) {
       setError("Indica si en la reunión se fijaron plazos de pago.");
       return;
     }
-    if (draft.paymentsAgreed && dates.length === 0) {
-      setError("Agrega al menos una fecha de estado de pago conversada con el cliente.");
+    const project = projects.find((item) => item.id === projectId);
+    const variablePayments = appChannel() === "development";
+    const cadence: PaymentCadence | "" =
+      variablePayments && draft.paymentsAgreed && draft.paymentCadence ? draft.paymentCadence : "";
+    let dates = (draft.paymentDates ?? []).map((item) => item.trim()).filter(Boolean);
+    if (draft.paymentsAgreed && cadence) {
+      const start = draft.plannedStartDate || draft.soldStartDate || project?.startDate || "";
+      const finish = draft.plannedFinishDate || draft.soldFinishDate || project?.finishDate || "";
+      dates = datesForCadence(start, finish, cadence);
+      if (!dates.length) {
+        setError("El inicio y el término de la obra no alcanzan para ese día fijo.");
+        return;
+      }
+    } else if (draft.paymentsAgreed && dates.length === 0) {
+      setError(
+        variablePayments
+          ? "Elige un día fijo o agrega al menos una fecha de estado de pago."
+          : "Agrega al menos una fecha de estado de pago conversada con el cliente.",
+      );
       return;
     }
-    const payload = { ...draft, paymentDates: draft.paymentsAgreed ? dates : [] };
+    const payload = {
+      ...draft,
+      paymentCadence: cadence,
+      paymentDates: draft.paymentsAgreed ? dates : [],
+    };
     saveKickoff(projectId, payload);
     const ok = confirmClientKickoff(projectId, payload);
     if (!ok) {
@@ -1017,12 +1039,47 @@ export function ClientKickoffAssistant({
                   type="radio"
                   name="paymentsAgreed"
                   checked={draft.paymentsAgreed === false}
-                  onChange={() => patchDraft({ paymentsAgreed: false, paymentDates: [] })}
+                  onChange={() => patchDraft({ paymentsAgreed: false, paymentDates: [], paymentCadence: "" })}
                 />
                 No se fijaron
               </label>
             </div>
-            {draft.paymentsAgreed ? (
+            {draft.paymentsAgreed && appChannel() === "development" ? (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-600">
+                  El plazo usa un día que existe en todos los meses. No se usa el 29 ni el 30.
+                </p>
+                {PAYMENT_CADENCES.map((item) => (
+                  <label key={item.id} className="flex items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="paymentCadence"
+                      className="mt-1"
+                      checked={draft.paymentCadence === item.id}
+                      onChange={() => patchDraft({ paymentCadence: item.id, paymentDates: [] })}
+                    />
+                    <span>
+                      <span className="font-medium">{item.label}</span>
+                      <span className="mt-0.5 block text-xs text-slate-600">{item.detail}</span>
+                    </span>
+                  </label>
+                ))}
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="paymentCadence"
+                    className="mt-1"
+                    checked={!draft.paymentCadence}
+                    onChange={() => patchDraft({ paymentCadence: "", paymentDates: draft.paymentDates?.length ? draft.paymentDates : [""] })}
+                  />
+                  <span>
+                    <span className="font-medium">Fechas sueltas</span>
+                    <span className="mt-0.5 block text-xs text-slate-600">Una fecha distinta, fuera de esos días fijos.</span>
+                  </span>
+                </label>
+              </div>
+            ) : null}
+            {draft.paymentsAgreed && !draft.paymentCadence ? (
               <div className="space-y-2">
                 {(draft.paymentDates ?? [""]).map((date, index) => (
                   <label key={`pago-${index}`} className="block text-sm">
@@ -1159,6 +1216,7 @@ function seedDraft(
     paymentsAgreed: resumedKickoff?.paymentsAgreed ?? null,
     paymentNote: resumedKickoff?.paymentNote ?? "",
     paymentDates: resumedKickoff?.paymentDates ?? [],
+    paymentCadence: resumedKickoff?.paymentCadence ?? "",
   };
 }
 

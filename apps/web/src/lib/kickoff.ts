@@ -222,6 +222,7 @@ export function emptyKickoff(projectId: string, clientId: string): ProjectKickof
     paymentsAgreed: null,
     paymentNote: "",
     paymentDates: [],
+    paymentCadence: "",
   };
 }
 
@@ -255,6 +256,11 @@ export function normalizeKickoff(raw: Partial<ProjectKickoff> | undefined, proje
     paymentDates: Array.isArray(raw?.paymentDates)
       ? raw.paymentDates.filter((item): item is string => typeof item === "string" && Boolean(item))
       : [],
+    paymentCadence: (raw?.paymentCadence === "month_early" ||
+    raw?.paymentCadence === "month_late" ||
+    raw?.paymentCadence === "quincena"
+      ? raw.paymentCadence
+      : "") as ProjectKickoff["paymentCadence"],
   };
   if (base.internalConfirmedAt && !base.commercialDeliveredAt) {
     base.commercialDeliveredAt = base.internalConfirmedAt;

@@ -16,9 +16,11 @@ import { useRoleContext } from "./RoleProvider";
 import { OperatingModeSwitch } from "./OperatingModeSwitch";
 
 const ENV_FOOTER =
-  appChannel() === "development"
-    ? "OpenEVM · Ambiente local · rama Dev · Seminario de Grado UNAB · Uso académico"
-    : "OpenEVM · Validación · Seminario de Grado UNAB · Uso académico";
+  appChannel() === "staging"
+    ? "OpenEVM · Staging · Seminario de Grado UNAB · Uso académico"
+    : process.env.NODE_ENV === "development"
+      ? "OpenEVM · Ambiente local · rama Dev · Seminario de Grado UNAB · Uso académico"
+      : "OpenEVM · Ambiente de desarrollo · rama Dev · Seminario de Grado UNAB · Uso académico";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();

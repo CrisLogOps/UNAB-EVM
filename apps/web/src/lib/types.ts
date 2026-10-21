@@ -354,7 +354,11 @@ export interface ProjectKickoff {
   paymentNote: string;
   /** Fechas de estado de pago conversadas. Vacío si no se fijaron. */
   paymentDates: string[];
+  /** Regla de días fijos. Vacío si las fechas se escribieron una a una. */
+  paymentCadence: PaymentCadence | "";
 }
+
+export type PaymentCadence = "month_early" | "month_late" | "quincena";
 
 export interface PaymentCut {
   id: string;
@@ -362,6 +366,8 @@ export interface PaymentCut {
   dueDate: string;
   label: string;
   origin: "kickoff" | "admin";
+  /** Regla que armó esta fecha. Vacío si se agregó a mano. */
+  rule: PaymentCadence | "";
   note: string;
   /** Lectura congelada. Null mientras el estado sigue abierto. */
   frozenAt: string | null;

@@ -6,7 +6,9 @@ import { useOrg } from "@/components/layout/OrgProvider";
 import { formatClp } from "@/lib/evm";
 import { weeklyReadings, type WeekReading } from "@/lib/evm-project";
 import { minuteAcRows } from "@/lib/minutes";
-import type { PaymentCut } from "@/lib/types";
+import { appChannel } from "@/lib/operating-mode";
+import { datesForCadence, PAYMENT_CADENCES } from "@/lib/payment-cuts";
+import type { PaymentCadence, PaymentCut } from "@/lib/types";
 
 function money(value: number | null) {
   if (value == null) return "—";
@@ -28,6 +30,7 @@ export function PaymentCutsPanel() {
     kickoffFor,
     paymentCuts,
     addPaymentCut,
+    applyPaymentCadence,
     removePaymentCut,
     closePaymentCut,
   } = useOrg();
@@ -55,8 +58,11 @@ export function PaymentCutsPanel() {
   const byDate = new Map(cuts.map((item) => [item.dueDate, item]));
   const [dueDate, setDueDate] = useState("");
   const [label, setLabel] = useState("");
+  const [cadence, setCadence] = useState<PaymentCadence>("month_early");
   const [message, setMessage] = useState("");
   const isAdmin = role === "owner";
+  const variablePayments = appChannel() === "development";
+  const preview = variablePayments ? datesForCadence(project.startDate, project.finishDate, cadence) : [];
 
   const economic = weeks.map((week) => pointOf(week, byDate.get(week.date), "money"));
   const physical = weeks.map((week) => pointOf(week, byDate.get(week.date), "percent"));
@@ -102,6 +108,54 @@ export function PaymentCutsPanel() {
             : "Los plazos se conversan en el kickoff con el cliente. Si esa reunión no los deja, el administrador los agrega igual."}
         {kickoff?.paymentNote ? ` ${kickoff.paymentNote}` : ""}
       </p>
+
+      {isAdmin && variablePayments ? (
+        <form
+          className="space-y-2 rounded-xl border border-slate-200 bg-white p-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const result = applyPaymentCadence(project.id, cadence);
+            setMessage(
+              result.ok
+                ? `Quedaron ${result.count} estados entre el inicio y el término. Un estado ya cerrado no se mueve.`
+                : result.message,
+            );
+          }}
+        >
+          <p className="text-sm font-medium text-slate-800">Plazo variable</p>
+          <p className="text-xs text-slate-600">
+            Días fijos del 1 al 28. El 29 y el 30 no se usan, así febrero y los meses cortos calzan.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {PAYMENT_CADENCES.map((item) => (
+              <label key={item.id} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 text-sm">
+                <input
+                  type="radio"
+                  name="dashboardCadence"
+                  className="mt-1"
+                  checked={cadence === item.id}
+                  onChange={() => setCadence(item.id)}
+                />
+                <span>
+                  <span className="font-medium">{item.label}</span>
+                  <span className="mt-0.5 block text-xs text-slate-600">{item.detail}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">
+            {preview.length
+              ? `${preview.length} estados, del ${preview[0]} al ${preview[preview.length - 1]}.`
+              : "Esta obra no tiene un tramo donde caiga ese día."}
+          </p>
+          <button
+            type="submit"
+            className="rounded-md bg-[var(--brand)] px-3 py-2 text-sm text-white hover:bg-[var(--brand-dark)]"
+          >
+            Armar estados
+          </button>
+        </form>
+      ) : null}
 
       {isAdmin ? (
         <form
