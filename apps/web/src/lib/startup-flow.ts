@@ -1,5 +1,5 @@
 import { ROLE_LABELS } from "./constants";
-import { areasUserCanReview, partiesValidated, pendingAreas, proposalReady } from "./kickoff";
+import { antecedentsReady, areasUserCanReview, partiesValidated, pendingAreas } from "./kickoff";
 import type { TeamCoverageMode } from "./coverage";
 import type {
   AtomicPermission,
@@ -110,7 +110,7 @@ function isIndependentFlow(input: StartupFlowInput) {
 function contextCopy(input: StartupFlowInput) {
   const independent = isIndependentFlow(input);
   if (independent) {
-    return "Como profesional independiente cubres el arranque: cliente, proyecto, kickoff interno (lo vendido + criterio PMBOK, sin áreas) y kickoff con el cliente. El control se enciende con el cronograma. La pestaña Modo permite pasar a colaborativo sin rehacer el alta.";
+    return "Como profesional independiente cubres el arranque: cliente, proyecto, antecedentes (documento El proyecto), kickoff interno con firma y kickoff con el cliente para cerrar la fase 1. El control se enciende con el cronograma y el valor ganado. Las minutas registran el gasto y las instrucciones. La pestaña Modo permite pasar a colaborativo sin rehacer el alta.";
   }
   if (input.coverageMode === "counterpart") {
     return "Hay contraparte. Cada perfil ve en Inicio lo que le falta; lo demás espera a la otra persona.";
@@ -122,7 +122,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
   const realProject = input.project.id !== "prj-pending" && input.projects.length > 0;
   const kickoff = input.kickoff;
   const independent = isIndependentFlow(input);
-  const commercialDone = Boolean(kickoff?.commercialDeliveredAt) || Boolean(kickoff && proposalReady(kickoff.proposal));
+  const commercialDone = Boolean(kickoff && antecedentsReady(kickoff));
   const commentsStarted = Boolean(kickoff?.areaReviews.length);
   const consultationDone = Boolean(kickoff?.internalDate && kickoff?.clientKickoffDueDate);
   const pmDone = independent
@@ -187,7 +187,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
       code: "F1.5",
       title: "Kickoff interno",
       detail:
-        "Opcional. Registrá lo vendido, notas para el cliente y el criterio PMBOK, o saltá el kickoff si la obra ya está en curso.",
+        "Con el documento El proyecto cargado, anotá el criterio PMBOK y formalizá con tu nombre antes del kickoff con el cliente.",
       href: "/clients",
       done: pmDone || kickoffBypassed,
       yours: true,
@@ -199,20 +199,21 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
       {
         id: "kickoff_commercial",
         code: "F1.5",
-        title: "Extracto de lo vendido",
-        detail: "Opcional. El administrador o el gestor escriben el alcance. No hace falta un área comercial.",
+        title: "Antecedentes del proyecto",
+        detail:
+          "Cargá el documento El proyecto con las condiciones del servicio vendido, y las partidas o consideraciones.",
         href: realProject ? "/demo" : "/clients",
         done: commercialDone || kickoffBypassed,
         yours: input.role === "owner" || input.role === "pmo" || input.role === "commercial",
         waitingOn: waitingLabel(input.users, "pmo", input.ownerManagesAll),
-        actionLabel: realProject ? "Escribir extracto" : "Cargar propuesta",
+        actionLabel: realProject ? "Ver antecedentes" : "Cargar antecedentes",
       },
       {
         id: "kickoff_areas",
         code: "F2.1",
         title: "Comentarios de las áreas",
         detail:
-          "Opcional. Cada área puede comentar lo vendido. No bloquea el cronograma ni exige un área comercial.",
+          "Con el documento cargado, cada área completa los datos que necesita la gestión. El comentario no bloquea la firma.",
         href: "/demo",
         done: commercialDone || kickoffBypassed,
         yours:
@@ -234,7 +235,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
         code: "F2.2",
         title: "Fecha de consulta y comentarios del gestor",
         detail:
-          "Opcional. El administrador o el gestor fijan la fecha de consulta y el plazo con el cliente.",
+          "El administrador o el gestor fijan la consulta y formalizan el kickoff interno con su nombre.",
         href: "/clients",
         done: pmDone || kickoffBypassed,
         yours: input.role === "pmo" || input.role === "owner",
@@ -249,7 +250,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
       id: "kickoff_client",
       code: "F2.4",
       title: "Kickoff con el cliente",
-      detail: "Opcional. El administrador o el gestor registran acuerdos. El cronograma no espera este paso.",
+      detail: "Con los antecedentes y la firma interna, los acuerdos con el cliente cierran la fase 1.",
       href: "/clients",
       done: clientKickoffDone || kickoffBypassed,
       yours: input.role === "owner" || input.role === "pmo",
@@ -260,12 +261,12 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
       id: "budget_load",
       code: "F3.3",
       title: "Asignar presupuesto",
-      detail: input.ownerManagesAll
-        ? "Carga el monto de la obra. Sin presupuesto el control mide plazo, no costo."
-        : "Finanzas (o quien cubra) carga el BAC en pesos.",
+      detail: input.ownerManagesAll || !hasStaffRole(input.users, "finance")
+        ? "El administrador carga el monto. El gestor no propone el presupuesto: lo revisa y, si cambia la cifra, adjunta evidencia."
+        : "Finanzas carga el BAC en pesos. El gestor lo revisa después.",
       href: "/budget",
       done: budgetLoaded,
-      yours: isActor(input.role, "finance", input.ownerManagesAll, input.users, ["owner", "pmo", "finance"]),
+      yours: isActor(input.role, "finance", input.ownerManagesAll, input.users, ["owner"]),
       waitingOn: waitingLabel(input.users, "finance", input.ownerManagesAll),
       actionLabel: "Cargar presupuesto",
     },
@@ -273,7 +274,7 @@ export function buildStartupFlow(input: StartupFlowInput): StartupFlow {
       id: "budget_review",
       code: "F3.3",
       title: "Revisar el presupuesto",
-      detail: "El gestor acepta el monto o propone otro.",
+      detail: "El gestor acepta el monto o envía otra cifra con un archivo que fundamente el cambio. No carga el presupuesto.",
       href: "/budget-review",
       done: budgetReviewed,
       yours: isActor(input.role, "pmo", input.ownerManagesAll, input.users, ["owner", "pmo"]),

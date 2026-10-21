@@ -79,7 +79,8 @@ export function ProfilesAdminView() {
           <h1 className="text-2xl font-semibold">Puestos</h1>
           <p className="max-w-3xl text-sm text-slate-600">
             <strong>Para cambiar al gerente de proyectos:</strong> elige esa fila (queda marcada) y, abajo,
-            marca las <em>tareas extra</em> si falta Finanzas o Terreno. Las pantallas del menú se editan
+            marca las <em>tareas extra</em> de avance si falta Terreno. El presupuesto y los gastos quedan en el
+            administrador. Las pantallas del menú se editan
             en el mismo recuadro. El tamaño de empresa (chica / mediana / completa) se elige en{" "}
             <Link href="/areas" className="underline">
               Áreas
@@ -333,12 +334,14 @@ function CoverageTasks({
     <fieldset className="mt-4 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
       <legend className="px-1 text-sm font-medium text-slate-800">Si falta personal · tareas extra</legend>
       <p className="mb-2 text-xs text-slate-600">
-        Marca lo que este puesto cubre mientras no exista la persona dueña (Finanzas o Terreno). El visto
-        bueno del administrador no se puede pasar. Si la casilla está bloqueada, o ya está cubierto por el
-        tamaño del equipo, o ya hay alguien en ese puesto.
+        {role === "pmo"
+          ? "El gestor puede cubrir el avance si no hay terreno. El presupuesto y los gastos los carga el administrador; no se marcan aquí."
+          : "Marca lo que este puesto cubre mientras no exista la persona dueña. El visto bueno del administrador no se puede pasar."}
       </p>
       <div className="grid gap-2">
-        {DELEGABLE_TASKS.map((task) => {
+        {DELEGABLE_TASKS.filter(
+          (task) => role !== "pmo" || (task.permission !== "cost:edit" && task.vacantRole !== "finance"),
+        ).map((task) => {
           const vacant = vacantRoles.has(task.vacantRole);
           const autoOn = autoIds.includes(task.id);
           const extraOn = selectedIds.includes(task.id);

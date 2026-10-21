@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ModalForm, type FormField } from "@/components/forms/ModalForm";
+import { WorkBookBoard } from "@/components/views/WorkBookBoard";
 import { WorkBookDocument } from "@/components/views/WorkBookDocument";
 import { ROLE_LABELS } from "@/lib/constants";
 import { downloadWorkBookPdf } from "@/lib/work-book-pdf";
@@ -12,6 +13,7 @@ import {
   SAFETY_LEVELS,
   THIRD_PARTY_KINDS,
   WEATHER_OPTIONS,
+  WORK_BOOK_BOARD_COLUMNS,
   WORK_BOOK_KINDS,
   buildWorkBookDocument,
   folioLabel,
@@ -22,6 +24,7 @@ import {
 import type { WorkBookKind, WorkBookSafetyLevel, WorkBookThirdPartyKind } from "@/lib/types";
 
 type FilterId = "all" | WorkBookKind;
+type PaneId = "board" | "register";
 
 function fieldsFor(kind: WorkBookKind, activityOptions: { value: string; label: string }[]): FormField[] {
   const today = new Date().toISOString().slice(0, 10);
@@ -128,6 +131,7 @@ export function WorkBookView() {
     workBook,
     users,
     addWorkBookEntry,
+    setWorkBookBoardStatus,
     saveWorkBookMeta,
     workBookMetaFor,
     clientFor,
@@ -135,8 +139,10 @@ export function WorkBookView() {
     canOperate,
     role,
     sessionUser,
+    isIndividualMode,
   } = useOrg();
   const [filter, setFilter] = useState<FilterId>("all");
+  const [pane, setPane] = useState<PaneId>(isIndividualMode ? "board" : "register");
   const [draftKind, setDraftKind] = useState<WorkBookKind | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
@@ -157,6 +163,10 @@ export function WorkBookView() {
       contractorRep: storedMeta.contractorRep || sessionUser.name,
     });
   }, [project.id, project.code, storedMeta.location, storedMeta.contractNumber, storedMeta.itoName, storedMeta.contractorRep, sessionUser.name]);
+
+  useEffect(() => {
+    setPane(isIndividualMode ? "board" : "register");
+  }, [isIndividualMode]);
 
   const rows = useMemo(() => {
     return workBook
@@ -224,9 +234,10 @@ export function WorkBookView() {
         </p>
         <h1 className="text-xl font-semibold sm:text-2xl">Libro de obra</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          {project.name} · {project.code}. Registro para fiscalización o evento: carátula con los datos mínimos
-          exigidos en Chile y un folio por anotación, con espacio de firma del contratista y del ITO. El PDF es
-          copia de trabajo; no reemplaza el libro inmutable del MOP.
+          {project.name} · {project.code}.{" "}
+          {isIndividualMode
+            ? "Como profesional independiente no hay contraparte en la plataforma: el tablero es tu control de faena. El registro y el PDF siguen siendo la copia de trabajo para fiscalización; no reemplazan el libro inmutable del MOP."
+            : "Registro para fiscalización o evento: carátula con los datos mínimos exigidos en Chile y un folio por anotación, con espacio de firma del contratista y del ITO. El PDF es copia de trabajo; no reemplaza el libro inmutable del MOP."}
         </p>
       </div>
 
@@ -292,12 +303,14 @@ export function WorkBookView() {
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium">ITO titular</span>
+            <span className="mb-1 block font-medium">
+              {isIndividualMode ? "ITO / profesional a cargo" : "ITO titular"}
+            </span>
             <input
               value={metaDraft.itoName}
               onChange={(event) => setMetaDraft((current) => ({ ...current, itoName: event.target.value }))}
               className="w-full rounded-md border border-slate-200 px-3 py-2"
-              placeholder="Nombre de la inspección técnica"
+              placeholder={isIndividualMode ? sessionUser.name || "Tu nombre si no hay ITO aparte" : "Nombre de la inspección técnica"}
             />
           </label>
           <label className="block text-sm">
@@ -341,6 +354,48 @@ export function WorkBookView() {
       {canWrite ? null : (
         <p className="text-sm text-slate-500">Este puesto consulta el libro. Quien carga avance o faena deja las anotaciones.</p>
       )}
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setPane("board")}
+          className={`rounded-full px-3 py-1.5 text-sm ${
+            pane === "board" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600"
+          }`}
+        >
+          Tablero
+        </button>
+        <button
+          type="button"
+          onClick={() => setPane("register")}
+          className={`rounded-full px-3 py-1.5 text-sm ${
+            pane === "register" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-600"
+          }`}
+        >
+          Registro
+        </button>
+      </div>
+
+      {pane === "board" ? (
+        <WorkBookBoard
+          entries={rows}
+          gantt={gantt}
+          canWrite={canWrite}
+          independent={isIndividualMode}
+          onMove={(id, status) => {
+            setWorkBookBoardStatus(id, status);
+            setMessage(
+              status === "closed" && isIndividualMode
+                ? "Folio cerrado en tu tablero. Si venía de Avance, esa evidencia ya cuenta para el EV."
+                : "Tablero actualizado.",
+            );
+          }}
+        />
+      ) : null}
+
+      {pane === "register" ? (
+      <>
+
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {WORK_BOOK_KINDS.map((kind) => (
@@ -403,6 +458,7 @@ export function WorkBookView() {
                     {folioLabel(item.folio)} · {meta.short} · {formatDay(item.occurredOn)}
                     {item.occurredTime ? ` · ${item.occurredTime}` : ""}
                     {item.source === "progress" ? " · desde Avance" : ""}
+                    {` · ${WORK_BOOK_BOARD_COLUMNS.find((column) => column.id === item.boardStatus)?.label ?? "Por atender"}`}
                   </p>
                   <p className="text-xs text-slate-500">
                     {who?.name || ROLE_LABELS[who?.role ?? "field"]}
@@ -444,6 +500,8 @@ export function WorkBookView() {
           observación de seguridad o un reclamo de terceros. Si ya hay avance cargado, esas notas aparecen acá.
         </p>
       )}
+      </>
+      ) : null}
       </div>
 
       <ModalForm
@@ -475,9 +533,10 @@ export function WorkBookView() {
             activityId: values.activityId,
           });
           setDraftKind(null);
+          if (ok && isIndividualMode) setPane("board");
           setMessage(
             ok
-              ? `${draftMeta?.label ?? "Anotación"} ingresada al libro de obra.`
+              ? `${draftMeta?.label ?? "Anotación"} ingresada al libro de obra.${isIndividualMode ? " Aparece en el tablero." : ""}`
               : `Falta el relato (mínimo ${MIN_WORKBOOK_BODY} caracteres) o un dato obligatorio del tipo de anotación.`,
           );
         }}

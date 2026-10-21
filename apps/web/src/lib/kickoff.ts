@@ -3,6 +3,7 @@ import type {
   CommercialFit,
   KickoffPhase,
   KickoffProposal,
+  KickoffAntecedentItem,
   KickoffAreaReview,
   KickoffReviewStance,
   KnowledgeEntry,
@@ -17,7 +18,7 @@ import type {
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
   draft_kickoff: "Kickoff",
   awaiting_budget: "Espera Finanzas",
-  budget_proposed: "Propuesto por Finanzas",
+  budget_proposed: "Presupuesto cargado",
   budget_counter: "Contrapropuesta",
   pending_approval: "Espera visto bueno",
   active: "Activo",
@@ -142,6 +143,21 @@ export function proposalReady(proposal: KickoffProposal | undefined) {
   return Boolean(proposal?.body?.trim());
 }
 
+export function normalizeAntecedentItem(raw: Partial<KickoffAntecedentItem>): KickoffAntecedentItem {
+  return {
+    id: raw.id ?? `ant-${Date.now()}`,
+    kind: raw.kind === "partida" ? "partida" : "consideracion",
+    title: raw.title ?? "",
+    detail: raw.detail ?? "",
+  };
+}
+
+/** Documento El proyecto más las condiciones del servicio vendido. */
+export function antecedentsReady(kickoff: Pick<ProjectKickoff, "proposal"> | undefined) {
+  const body = kickoff?.proposal?.body?.trim() ?? "";
+  return body.length >= 20 && Boolean(kickoff?.proposal?.fileName?.trim());
+}
+
 export const COMMERCIAL_FIT_OPTIONS: { id: Exclude<CommercialFit, "">; label: string; hint: string }[] = [
   {
     id: "within",
@@ -195,10 +211,17 @@ export function emptyKickoff(projectId: string, clientId: string): ProjectKickof
     pmValidatedBy: "",
     pmValidatedAt: null,
     internalConfirmedAt: null,
+    antecedentItems: [],
+    internalSignerName: "",
+    internalSignedAt: null,
+    baselineScheduleName: "",
     clientDate: "",
     clientAttendees: "",
     clientAgreements: "",
     clientConfirmedAt: null,
+    paymentsAgreed: null,
+    paymentNote: "",
+    paymentDates: [],
   };
 }
 
@@ -219,10 +242,19 @@ export function normalizeKickoff(raw: Partial<ProjectKickoff> | undefined, proje
     finalProposalToClient: raw?.finalProposalToClient ?? "",
     pmValidatedAt: raw?.pmValidatedAt ?? null,
     internalConfirmedAt: raw?.internalConfirmedAt ?? null,
+    antecedentItems: (raw?.antecedentItems ?? []).map(normalizeAntecedentItem),
+    internalSignerName: raw?.internalSignerName ?? "",
+    internalSignedAt: raw?.internalSignedAt ?? null,
+    baselineScheduleName: raw?.baselineScheduleName ?? "",
     clientConfirmedAt: raw?.clientConfirmedAt ?? null,
     pmFit: raw?.pmFit ?? "",
     clientKickoffDueDate: raw?.clientKickoffDueDate ?? "",
     internalDate: raw?.internalDate ?? "",
+    paymentsAgreed: raw?.paymentsAgreed === true ? true : raw?.paymentsAgreed === false ? false : null,
+    paymentNote: raw?.paymentNote ?? "",
+    paymentDates: Array.isArray(raw?.paymentDates)
+      ? raw.paymentDates.filter((item): item is string => typeof item === "string" && Boolean(item))
+      : [],
   };
   if (base.internalConfirmedAt && !base.commercialDeliveredAt) {
     base.commercialDeliveredAt = base.internalConfirmedAt;
@@ -298,7 +330,7 @@ export function individualEvalComplete(kickoff: ProjectKickoff) {
 }
 
 export function individualInternalReady(kickoff: ProjectKickoff) {
-  const sold = proposalReady(kickoff.proposal) || Boolean(kickoff.commercialCommitment?.trim());
+  const sold = antecedentsReady(kickoff);
   const notes = (kickoff.internalNotes ?? "").trim().length >= MIN_INDIVIDUAL_EVAL;
   return sold && notes && individualEvalComplete(kickoff);
 }
@@ -318,9 +350,10 @@ export function evaluateInternalGate(
   independent = false,
 ): InternalKickoffGate {
   if (independent) {
-    const sold = proposalReady(kickoff.proposal) || Boolean(kickoff.commercialCommitment?.trim());
+    const sold = antecedentsReady(kickoff);
     const reasons: string[] = [];
-    if (!sold) reasons.push("Registra la descripción de lo vendido (alcance de la propuesta comercial).");
+    if (!sold) reasons.push("Carga el documento El proyecto y las condiciones del servicio vendido en antecedentes.");
+    if (!kickoff.internalSignedAt) reasons.push("Formaliza el kickoff interno con el nombre de quien firma.");
     if ((kickoff.internalNotes ?? "").trim().length < MIN_INDIVIDUAL_EVAL) {
       reasons.push("Anota lo que vas a validar con el cliente en el kickoff de partida.");
     }
@@ -341,9 +374,12 @@ export function evaluateInternalGate(
   }
   const pending = pendingAreas(kickoff, areas);
   const reasons: string[] = [];
-  const sold = collaborativeInternalReadyExtract(kickoff);
+  const sold = antecedentsReady(kickoff);
   if (!sold) {
-    reasons.push("Registra el extracto de lo vendido para que las áreas puedan comentar la misma propuesta.");
+    reasons.push("Carga el documento El proyecto y las condiciones del servicio vendido en antecedentes.");
+  }
+  if (!kickoff.internalSignedAt) {
+    reasons.push("Formaliza el kickoff interno con el nombre de quien firma.");
   }
   if (!kickoff.internalDate) {
     reasons.push("Fija la fecha de consulta interna a las áreas.");

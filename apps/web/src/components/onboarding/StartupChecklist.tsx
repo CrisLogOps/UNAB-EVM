@@ -139,7 +139,9 @@ export function StartupChecklist({ compact = false }: { compact?: boolean }) {
 
       {flow.next && !flow.next.yours ? (
         <p className="mt-3 text-xs text-slate-600">
-          Este perfil ({ROLE_LABELS[role]}) no carga ese dato. Cambia «Ver como» o espera a {flow.next.waitingOn}.
+          {flow.next.id === "budget_review"
+            ? `El presupuesto lo carga el administrador. La revisión la hace ${flow.next.waitingOn}: acepta el monto o envía otra cifra con un archivo.`
+            : `Este paso lo hace ${flow.next.waitingOn}.`}
         </p>
       ) : null}
     </section>

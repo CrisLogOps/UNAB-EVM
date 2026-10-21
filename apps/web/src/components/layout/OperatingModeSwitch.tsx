@@ -9,6 +9,7 @@ import {
   canReturnToIndividual,
   extraCollaborators,
   resolveOperatingMode,
+  showOperatingModeTools,
   type OperatingMode,
 } from "@/lib/operating-mode";
 
@@ -23,6 +24,7 @@ export function OperatingModeSwitch({ variant = "toolbar" }: { variant?: "toolba
   const extraPeople = extraCollaborators(users).length;
   const individualLocked = extraPeople > 0;
   const canGoIndividual = canReturnToIndividual(users);
+  if (!showOperatingModeTools(current)) return null;
 
   function apply(next: OperatingMode) {
     if (!canSwitch || next === current) return;

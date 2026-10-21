@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable, type Column } from "@/components/data/DataTable";
-import { SCurveChart } from "@/components/charts/SCurveChart";
+import { PaymentCutsPanel } from "@/components/views/PaymentCutsPanel";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ELEMENT_KIND_LABELS } from "@/lib/schedule-csv";
@@ -16,7 +16,7 @@ import {
   type ActivityEvmRow,
   type ScheduleRunStatus,
 } from "@/lib/evm-project";
-import { blockingActivityIds } from "@/lib/quality";
+import { minuteAcRows, minuteTotals } from "@/lib/minutes";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { ScheduleElementKind } from "@/lib/types";
 import { StartupChecklist } from "@/components/onboarding/StartupChecklist";
@@ -72,20 +72,18 @@ const EVIDENCE_FILTERS: { value: string; label: string }[] = [
 ];
 
 export function DashboardView() {
-  const { project, role, teamForProject, assignments, sessionUser, gantt, reports, nonconformities, canOperate, kickoffFor, isIndividualMode } = useOrg();
+  const { project, role, teamForProject, assignments, sessionUser, gantt, reports, minutes, canOperate, kickoffFor, isIndividualMode } = useOrg();
   const router = useRouter();
   const team = teamForProject(project.id);
   const activities = useMemo(
     () => gantt.filter((item) => item.projectId === project.id),
     [gantt, project.id],
   );
-  const held = useMemo(
-    () => blockingActivityIds(nonconformities.filter((item) => item.projectId === project.id)),
-    [nonconformities, project.id],
-  );
+  const acRows = useMemo(() => minuteAcRows(minutes, project.id), [minutes, project.id]);
+  const minuteMoney = minuteTotals(minutes, project.id);
   const live = useMemo(
-    () => computeLiveEvm(project, activities, reports, role, undefined, held),
-    [project, activities, reports, role, held],
+    () => computeLiveEvm(project, activities, reports, role, undefined, undefined, acRows),
+    [project, activities, reports, role, acRows],
   );
   const selected = live.metrics;
   const fieldView = role === "field" || role === "subcontractor";
@@ -182,15 +180,7 @@ export function DashboardView() {
     {
       key: "ev",
       header: "% ganado (EV)",
-      render: (row) =>
-        held.has(row.id) ? (
-          <span>
-            <span className="block">{percentLabel(row.earnedPercent)}</span>
-            <span className="mt-0.5 block text-[11px] font-medium text-amber-800">No suma valor ganado</span>
-          </span>
-        ) : (
-          percentLabel(row.earnedPercent)
-        ),
+      render: (row) => percentLabel(row.earnedPercent),
     },
     {
       key: "money",
@@ -256,10 +246,10 @@ export function DashboardView() {
               ) : null}
               {canUpload ? (
                 <Link
-                  href="/libro-obra"
+                  href="/minutas"
                   className="w-full rounded-md border border-slate-200 px-3 py-3 text-center text-sm hover:bg-slate-50 sm:w-auto sm:py-2"
                 >
-                  Libro de obra
+                  Minutas
                 </Link>
               ) : null}
               {canOperate("schedule:edit") ? (
@@ -274,20 +264,13 @@ export function DashboardView() {
           </div>
 
           <p className="text-xs text-slate-500">
-            CPI = EV / AC (costo). SPI = EV / PV (plazo). Un valor bajo 1 indica desvío. El valor ganado solo
-            cuenta con evidencia validada (foto de terreno o documento de escritorio).
+            CPI = EV / AC (costo). SPI = EV / PV (plazo). Un valor bajo 1 indica desvío. El valor ganado cuenta
+            con evidencia validada. El AC suma el costo del avance y los gastos de las minutas. Los cortes
+            semanales comparan lo planificado, lo ganado y lo gastado. Un estado de pago cerrado guarda esa lectura.
+            {minuteMoney.adicional > 0
+              ? ` Adicionales por cobrar: ${formatClp(minuteMoney.adicional)}. No entran al CPI.`
+              : ""}
           </p>
-
-          {held.size ? (
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-              {held.size === 1
-                ? "Un trabajo no suma valor ganado mientras su observación siga abierta."
-                : `${held.size} trabajos no suman valor ganado mientras su observación siga abierta.`}{" "}
-              <Link href="/calidad" className="underline">
-                Revisar
-              </Link>
-            </p>
-          ) : null}
 
           <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <KpiCard
@@ -305,15 +288,11 @@ export function DashboardView() {
             <KpiCard
               label="Valor ganado (EV)"
               value={formatMeasure(selected.ev, live.moneyMode)}
-              status={held.size || selected.evidenceLocked ? "red" : selected.ev >= selected.pv ? "green" : "yellow"}
+              status={selected.evidenceLocked ? "red" : selected.ev >= selected.pv ? "green" : "yellow"}
               hint={
-                held.size
-                  ? held.size === 1
-                    ? "1 trabajo con una observación abierta"
-                    : `${held.size} trabajos con una observación abierta`
-                  : selected.evidenceLocked
-                    ? "Hay evidencias aún sin validar"
-                    : `${percentLabel(live.physicalPercent)} del plan de control`
+                selected.evidenceLocked
+                  ? "Hay evidencias aún sin validar"
+                  : `${percentLabel(live.physicalPercent)} del plan de control`
               }
               locked={selected.evidenceLocked}
             />
@@ -339,7 +318,7 @@ export function DashboardView() {
             />
           </section>
 
-          <SCurveChart data={live.series} moneyMode={live.moneyMode} />
+          <PaymentCutsPanel />
 
           <section>
             <div className="mb-3 flex flex-wrap items-end justify-between gap-2">

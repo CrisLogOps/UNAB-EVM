@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -20,12 +19,7 @@ function EvidenceReviewView() {
         <p className="max-w-2xl text-sm text-slate-600">
           {isIndividualMode
             ? "En modo independiente el avance se da por válido al registrarlo en Avance. Esta cola queda para el historial; no hay un gestor aparte que tenga que aprobar."
-            : "El gestor valida fotos de terreno y documentos de escritorio. Sin esa validación, el avance no cuenta en el paquete de trabajo ni en el valor ganado."}{" "}
-          La revisión del trabajo y las observaciones que frenan el valor ganado están en{" "}
-          <Link href="/calidad" className="underline">
-            Calidad
-          </Link>
-          .
+            : "El gestor valida fotos de terreno y documentos de escritorio. Sin esa validación, el avance no cuenta en el paquete de trabajo ni en el valor ganado."}
         </p>
       </div>
 

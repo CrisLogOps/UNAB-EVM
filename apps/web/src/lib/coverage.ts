@@ -138,8 +138,9 @@ export function autoCoverageTasks(role: UserRole, users: TenantUser[]): Coverage
   const mode = teamCoverageMode(users);
   return DELEGABLE_TASKS.filter((task) => {
     if (!vacant.has(task.vacantRole)) return false;
+    if (task.permission === "cost:edit" || task.vacantRole === "finance") return false;
     if (mode === "counterpart" && role === "pmo") return true;
-    if (mode === "escalated" && role === "pmo" && task.vacantRole !== "finance") {
+    if (mode === "escalated" && role === "pmo") {
       return reportsToRole(task.vacantRole) === "pmo";
     }
     return false;
@@ -153,7 +154,8 @@ export function coverageTasksForProfile(profile: OrgProfile, users: TenantUser[]
     (task) =>
       (profile.extraTaskIds ?? []).includes(task.id) &&
       vacant.has(task.vacantRole) &&
-      !auto.some((item) => item.id === task.id),
+      !auto.some((item) => item.id === task.id) &&
+      !(profile.role === "pmo" && (task.permission === "cost:edit" || task.vacantRole === "finance")),
   );
   return [...auto, ...extras];
 }
@@ -211,11 +213,11 @@ export function coverageModeCopy(mode: TeamCoverageMode): { title: string; text:
   if (mode === "counterpart") {
     return {
       title: "Equipo de 2: contraparte automática",
-      text: "El gerente de proyectos ejecuta (obras, calendario y tareas vacantes como cargar presupuesto). El administrador valida y no edita ese trabajo.",
+      text: "El administrador carga el presupuesto y los gastos. El gestor revisa esa cifra y, si no la comparte, envía una contrapropuesta con un archivo. El administrador no edita el cronograma ni la revisión del gestor.",
     };
   }
   return {
     title: "Equipo de 3 o más: escala por perfil",
-    text: "Terreno envía al jefe de proyecto; el jefe responde al administrador. Las validaciones (visto bueno) quedan en el administrador. Finanzas, si no hay persona, no se mezcla con el PM.",
+    text: "Terreno envía al jefe de proyecto; el jefe responde al administrador. El presupuesto y los gastos siguen en el administrador mientras no exista Finanzas ni jefe de faena. El gestor no los carga.",
   };
 }

@@ -22,7 +22,7 @@ import { useOrg } from "@/components/layout/OrgProvider";
 const ICONS: Record<string, typeof LayoutDashboard> = {
   "/demo": Home,
   "/knowledge": BookOpen,
-  "/libro-obra": ClipboardList,
+  "/minutas": ClipboardList,
   "/admin": Building2,
   "/users": Users,
   "/profiles": IdCard,
@@ -36,7 +36,6 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   "/budget-review": CircleDollarSign,
   "/budget-approval": CircleDollarSign,
   "/evidence": ImageIcon,
-  "/calidad": ClipboardList,
   "/cuts": LayoutDashboard,
   "/tenant": Building2,
   "/areas": Building2,
@@ -58,7 +57,7 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur print:hidden lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur print:hidden md:hidden"
       style={{ paddingBottom: "var(--safe-bottom)" }}
     >
       <ul className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>

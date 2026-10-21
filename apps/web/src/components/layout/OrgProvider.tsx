@@ -8,6 +8,7 @@ import { companySizeForMode, extraCollaborators, filterNavForMode, isIndividualM
 import { DIRECTION_AREA_ID, type AreaDraft } from "@/lib/tenant-setup";
 import { normalizeTenantIntegrations } from "@/lib/tenant-integrations";
 import { emptyKickoff, emptyProposal, normalizeKickoff, commercialDeliveryReady, partiesValidated, areasUserCanReview, coversKickoffRole, canEditSoldExtract, canEditPmNotes, proposalReady, draftFinalProposal, areaReviewValid, individualInternalReady, composeIndividualJudgment, collaborativeInternalReady } from "@/lib/kickoff";
+import { normalizePaymentCut, seedPaymentDates } from "@/lib/payment-cuts";
 import {
   extraComponentIdsForRole,
   extraPermissionsForRole,
@@ -16,7 +17,7 @@ import {
 import { canOperateAs, coveringRoles, handedRoles } from "@/lib/handover";
 import { canExecute } from "@/lib/raci";
 import { defaultScheduleActivities, isFieldEvidenceActivity, leafDescendants, normalizeGanttActivity, scaleActivitiesToBudget } from "@/lib/schedule-csv";
-import { registeredBudgetClp } from "@/lib/evm";
+import { formatClp, registeredBudgetClp } from "@/lib/evm";
 import {
   ACCOUNT_STORAGE_KEY,
   IDENTITY_STORAGE_KEY,
@@ -50,12 +51,18 @@ import type {
   AtomicPermission,
   Client,
   EvidenceStatus,
+  BudgetEvent,
   GanttActivity,
   KnowledgeEntry,
+  KnowledgeMoment,
+  KnowledgeScope,
   KickoffReviewStance,
   OrgArea,
   OrgProfile,
   PlatformComponentId,
+  ActivityNature,
+  ActivityPiece,
+  ProgressClosure,
   ProgressReport,
   Project,
   QualityCheck,
@@ -63,8 +70,12 @@ import type {
   QualityItemResult,
   Nonconformity,
   ProjectAssignment,
+  PaymentCut,
   ProjectKickoff,
   SetupPhase,
+  SiteMinute,
+  MinuteCostEffect,
+  MinuteOrigin,
   StaffInvite,
   Tenant,
   TenantUser,
@@ -127,11 +138,14 @@ interface OrgContextValue {
   assignments: ProjectAssignment[];
   kickoffs: ProjectKickoff[];
   knowledge: KnowledgeEntry[];
+  budgetEvents: BudgetEvent[];
   projects: Project[];
   visibleProjects: Project[];
   gantt: GanttActivity[];
   reports: ProgressReport[];
   workBook: WorkBookEntry[];
+  minutes: SiteMinute[];
+  paymentCuts: PaymentCut[];
   workBookMetas: WorkBookMeta[];
   qualityChecks: QualityCheck[];
   nonconformities: Nonconformity[];
@@ -211,6 +225,12 @@ interface OrgContextValue {
   confirmInternalKickoff: (projectId: string, patch?: Partial<ProjectKickoff>, userId?: string) => boolean;
   openClientKickoff: (projectId: string, patch?: Partial<ProjectKickoff>, userId?: string) => boolean;
   confirmClientKickoff: (projectId: string, patch?: Partial<ProjectKickoff>) => boolean;
+  addPaymentCut: (projectId: string, dueDate: string, label: string) => boolean;
+  removePaymentCut: (id: string) => boolean;
+  closePaymentCut: (
+    id: string,
+    reading: { pv: number; ev: number; ac: number; physicalPercent: number },
+  ) => boolean;
   activateProject: (projectId: string) => boolean;
   clientFor: (clientId: string) => Client | undefined;
   kickoffFor: (projectId: string) => ProjectKickoff | undefined;
@@ -218,21 +238,45 @@ interface OrgContextValue {
   removeAssignment: (id: string) => void;
   teamForProject: (projectId: string) => TenantUser[];
   proposeBudget: (id: string, amountClp: number, note: string) => void;
-  counterBudget: (id: string, amountClp: number, note: string) => void;
+  counterBudget: (id: string, amountClp: number, note: string, evidenceName: string) => boolean;
   acceptBudget: (id: string) => void;
   approveBudget: (id: string) => void;
   addGanttActivity: (input: Omit<GanttActivity, "id" | "projectId">) => void;
   updateGanttActivity: (id: string, patch: Partial<Omit<GanttActivity, "id" | "projectId" | "baselineStart" | "baselineFinish">>) => void;
-  importSchedule: (rows: Omit<GanttActivity, "id" | "projectId" | "progress">[]) => number;
+  importSchedule: (rows: Omit<GanttActivity, "id" | "projectId" | "progress">[], projectId?: string) => number;
   addProgressReport: (input: {
     taskId: string;
     physicalPercent: number;
     actualCost: number;
     evidenceName?: string;
     note?: string;
+    closure?: ProgressClosure;
+    pieceIds?: string[];
+    scopeNote?: string;
+    doneWhen?: string;
+    nature?: ActivityNature;
+    pieces?: ActivityPiece[];
   }) => boolean;
-  completeWorkPackage: (activityId: string) => number;
+  completeWorkPackage: (activityId: string, input: { note?: string; evidenceName?: string }) => number;
+  addKnowledgeRecord: (input: {
+    scope: KnowledgeScope;
+    moment: KnowledgeMoment;
+    comment: string;
+    evidenceFileName?: string;
+    clientId?: string;
+    projectId?: string;
+  }) => boolean;
   setWorkBookBoardStatus: (id: string, status: WorkBookBoardStatus) => void;
+  addMinute: (input: {
+    origin: MinuteOrigin;
+    issuer: string;
+    body: string;
+    occurredOn?: string;
+    activityId?: string;
+    costEffect: MinuteCostEffect;
+    amountClp?: number;
+    evidenceFileName?: string;
+  }) => boolean;
   addWorkBookEntry: (input: {
     kind: WorkBookKind;
     body: string;
@@ -596,6 +640,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [kickoffs, setKickoffs] = useState<ProjectKickoff[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeEntry[]>([]);
+  const [budgetEvents, setBudgetEvents] = useState<BudgetEvent[]>([]);
   const [invites, setInvites] = useState<StaffInvite[]>([]);
   const [areas, setAreas] = useState(initialAreas);
   const [profiles, setProfiles] = useState(() => applyOwnerCoverage(initialProfiles));
@@ -605,6 +650,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [gantt, setGantt] = useState<GanttActivity[]>([]);
   const [reports, setReports] = useState<ProgressReport[]>([]);
   const [workBook, setWorkBook] = useState<WorkBookEntry[]>([]);
+  const [minutes, setMinutes] = useState<SiteMinute[]>([]);
+  const [paymentCuts, setPaymentCuts] = useState<PaymentCut[]>([]);
   const [workBookMetas, setWorkBookMetas] = useState<WorkBookMeta[]>([]);
   const [qualityChecks, setQualityChecks] = useState<QualityCheck[]>([]);
   const [nonconformities, setNonconformities] = useState<Nonconformity[]>([]);
@@ -652,6 +699,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             );
           }
           if (snap.knowledge) setKnowledge(snap.knowledge);
+          if (Array.isArray(snap.budgetEvents)) setBudgetEvents(snap.budgetEvents);
           if (snap.invites) {
             setInvites(
               snap.invites.map((item: StaffInvite) => ({
@@ -689,6 +737,14 @@ export function OrgProvider({ children }: { children: ReactNode }) {
               snap.workBookMetas.map((item: WorkBookMeta) =>
                 normalizeWorkBookMeta(item, item.projectId, item.contractNumber),
               ),
+            );
+          }
+          if (Array.isArray(snap.minutes)) setMinutes(snap.minutes);
+          if (Array.isArray(snap.paymentCuts)) {
+            setPaymentCuts(
+              snap.paymentCuts
+                .map((item: Partial<PaymentCut>) => normalizePaymentCut(item))
+                .filter((item: PaymentCut | null): item is PaymentCut => Boolean(item)),
             );
           }
           if (Array.isArray(snap.qualityChecks)) setQualityChecks(snap.qualityChecks);
@@ -757,6 +813,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       clients,
       kickoffs,
       knowledge,
+      budgetEvents,
       invites,
       users,
       projects,
@@ -764,6 +821,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       gantt,
       reports,
       workBook,
+      minutes,
+      paymentCuts,
       workBookMetas,
       qualityChecks,
       nonconformities,
@@ -789,6 +848,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     clients,
     kickoffs,
     knowledge,
+    budgetEvents,
     invites,
     users,
     projects,
@@ -796,6 +856,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     gantt,
     reports,
     workBook,
+    minutes,
+    paymentCuts,
     workBookMetas,
     qualityChecks,
     nonconformities,
@@ -825,10 +887,9 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     if (role !== "owner" && canExecute(role, "evidence:upload")) {
       ids.push("progress");
       ids.push("workbook");
-      ids.push("quality");
     }
-    if (role !== "owner" && canExecute(role, "evidence:approve") && !ids.includes("quality")) {
-      ids.push("quality");
+    if (role !== "owner" && canExecute(role, "cost:edit") && !ids.includes("workbook")) {
+      ids.push("workbook");
     }
     const ordered = ["dashboard" as const, ...ids.filter((id) => id !== "dashboard")];
     if (!individual) return ordered;
@@ -837,6 +898,23 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<OrgContextValue>(
     () => {
+      function rememberBudget(
+        input: Pick<BudgetEvent, "projectId" | "kind" | "amountClp" | "note" | "evidenceFileName"> & { id?: string },
+      ) {
+        const entry: BudgetEvent = {
+          id: input.id ?? `be-${Date.now()}`,
+          projectId: input.projectId,
+          at: new Date().toISOString(),
+          kind: input.kind,
+          amountClp: input.amountClp,
+          note: input.note,
+          evidenceFileName: input.evidenceFileName,
+          byUserId: sessionUser.id,
+          byRole: sessionUser.role,
+          byName: sessionUser.name,
+        };
+        setBudgetEvents((current) => [...current, entry]);
+      }
       function openSession(name: string, email: string, provider: SsoProvider): SignInResult {
         const cleanName = name.trim();
         const cleanEmail = normalizeEmail(email);
@@ -913,6 +991,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setClients([]);
         setKickoffs([]);
         setKnowledge([]);
+        setBudgetEvents([]);
         setInvites([]);
         setProfiles(applyOwnerCoverage(initialProfiles));
         setAreas(initialAreas);
@@ -929,6 +1008,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setGantt([]);
         setReports([]);
         setWorkBook([]);
+        setMinutes([]);
+        setPaymentCuts([]);
         setWorkBookMetas([]);
         setQualityChecks([]);
         setNonconformities([]);
@@ -957,6 +1038,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       clients,
       kickoffs,
       knowledge,
+      budgetEvents,
       invites,
       areas,
       users,
@@ -967,6 +1049,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       gantt,
       reports,
       workBook,
+      minutes,
+      paymentCuts,
       workBookMetas,
       qualityChecks,
       nonconformities,
@@ -1325,10 +1409,20 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             usdClp: 940,
             proposedBac: proposedBac || null,
             counterBac: null,
-            budgetNote: proposedBac ? "Presupuesto inicial al crear el proyecto" : "",
+            budgetNote: proposedBac ? "Presupuesto inicial al crear el proyecto. Es el monto vendido." : "",
             scheduleExample: proposedBac > 0,
           },
         ]);
+        if (proposedBac > 0) {
+          rememberBudget({
+            id: `be-${stamp}`,
+            projectId: id,
+            kind: "inicial",
+            amountClp: proposedBac,
+            note: "Presupuesto inicial al crear el proyecto. Es el monto vendido.",
+            evidenceFileName: "",
+          });
+        }
         if (proposedBac > 0 && input.startDate && input.finishDate) {
           setGantt((current) => [
             ...current.filter((item) => item.projectId !== id),
@@ -1385,6 +1479,15 @@ export function OrgProvider({ children }: { children: ReactNode }) {
               : item,
           ),
         );
+        if (proposedBac > 0 && proposedBac !== target.proposedBac) {
+          rememberBudget({
+            projectId,
+            kind: "carga",
+            amountClp: proposedBac,
+            note: "Ajuste del presupuesto inicial.",
+            evidenceFileName: "",
+          });
+        }
         if (proposedBac > 0 && nextProject.startDate && nextProject.finishDate) {
           setGantt((current) => alignExampleSchedule(current, { ...nextProject, scheduleExample: true }, proposedBac));
         }
@@ -1699,6 +1802,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           ...patch,
         };
         if (!kickoff.clientAgreements?.trim()) return false;
+        if (kickoff.paymentsAgreed == null) return false;
+        if (kickoff.paymentsAgreed && !(kickoff.paymentDates ?? []).some(Boolean)) return false;
         setKickoffs((current) => {
           const next = { ...kickoff, clientConfirmedAt: new Date().toISOString() };
           if (current.some((item) => item.projectId === projectId)) {
@@ -1733,6 +1838,58 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           ]);
         }
         setProjectIdState(projectId);
+        if (kickoff.paymentsAgreed) {
+          setPaymentCuts((current) =>
+            seedPaymentDates(current, projectId, kickoff.paymentDates ?? [], "kickoff"),
+          );
+        }
+        return true;
+      },
+      addPaymentCut(projectId, dueDate, label) {
+        if (!projectId || !dueDate) return false;
+        if (paymentCuts.some((item) => item.projectId === projectId && item.dueDate === dueDate)) return false;
+        const count = paymentCuts.filter((item) => item.projectId === projectId).length + 1;
+        setPaymentCuts((current) => [
+          ...current,
+          {
+            id: `pay-${projectId}-${dueDate}`,
+            projectId,
+            dueDate,
+            label: label.trim() || `Estado de pago ${count}`,
+            origin: "admin",
+            note: "",
+            frozenAt: null,
+            pv: null,
+            ev: null,
+            ac: null,
+            physicalPercent: null,
+          },
+        ]);
+        return true;
+      },
+      removePaymentCut(id) {
+        const target = paymentCuts.find((item) => item.id === id);
+        if (!target || target.frozenAt) return false;
+        setPaymentCuts((current) => current.filter((item) => item.id !== id));
+        return true;
+      },
+      closePaymentCut(id, reading) {
+        const target = paymentCuts.find((item) => item.id === id);
+        if (!target || target.frozenAt) return false;
+        setPaymentCuts((current) =>
+          current.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  frozenAt: new Date().toISOString(),
+                  pv: reading.pv,
+                  ev: reading.ev,
+                  ac: reading.ac,
+                  physicalPercent: reading.physicalPercent,
+                }
+              : item,
+          ),
+        );
         return true;
       },
       activateProject(projectId) {
@@ -1786,8 +1943,18 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           ),
         );
         setGantt((current) => alignExampleSchedule(current, target, amountClp));
+        rememberBudget({
+          projectId: id,
+          kind: "carga",
+          amountClp,
+          note: note.trim() || "Monto confirmado para revisión del gestor.",
+          evidenceFileName: "",
+        });
       },
-      counterBudget(id, amountClp, note) {
+      counterBudget(id, amountClp, note, evidenceName) {
+        const reason = note.trim();
+        const fileName = evidenceName.trim();
+        if (reason.length < 8 || !fileName) return false;
         const target = projects.find((item) => item.id === id);
         setProjects((current) =>
           current.map((item) =>
@@ -1795,21 +1962,62 @@ export function OrgProvider({ children }: { children: ReactNode }) {
               ? {
                   ...item,
                   counterBac: amountClp,
-                  budgetNote: note,
-                  status: "budget_counter",
+                  budgetNote: reason,
+                  counterEvidenceName: fileName,
+                  status: "pending_approval",
                   scheduleExample: item.scheduleExample || !gantt.some((row) => row.projectId === id),
                 }
               : item,
           ),
         );
         setGantt((current) => alignExampleSchedule(current, target, amountClp));
+        rememberBudget({
+          projectId: id,
+          kind: "contrapropuesta",
+          amountClp,
+          note: reason,
+          evidenceFileName: fileName,
+        });
+        const client = clients.find((item) => item.id === target?.clientId);
+        const initial = target?.proposedBac ?? 0;
+        const entry: KnowledgeEntry = {
+          id: `kb-budget-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          projectId: id,
+          projectName: target?.name ?? "",
+          clientId: target?.clientId ?? "",
+          clientName: client?.name ?? "",
+          activityType: tenant.activityType,
+          areaId: "",
+          areaName: "Comercial",
+          role: sessionUser.role,
+          stance: "adjust",
+          comment: `En ${target?.name ?? "la obra"} el monto inicial era ${formatClp(initial)}. El gestor propuso ${formatClp(amountClp)}: ${reason}`,
+          evidenceFileName: fileName,
+          proposalTitle: target?.name ?? "Presupuesto",
+          scope: "empresa",
+          moment: "durante",
+          source: "presupuesto",
+        };
+        setKnowledge((current) => [...current, entry]);
+        return true;
       },
       acceptBudget(id) {
+        const target = projects.find((item) => item.id === id);
         setProjects((current) =>
           current.map((item) =>
             item.id === id ? { ...item, status: "pending_approval" } : item,
           ),
         );
+        if (target) {
+          rememberBudget({
+            projectId: id,
+            kind: "aceptacion",
+            amountClp: target.counterBac ?? target.proposedBac ?? 0,
+            note: "El gestor acepta el monto. Pasa al visto bueno del administrador.",
+            evidenceFileName: "",
+          });
+        }
       },
       approveBudget(id) {
         const target = projects.find((item) => item.id === id);
@@ -1827,6 +2035,13 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           }),
         );
         setGantt((current) => alignExampleSchedule(current, target, bac));
+        rememberBudget({
+          projectId: id,
+          kind: "aprobacion",
+          amountClp: bac,
+          note: "Visto bueno del administrador. Este monto queda como presupuesto de control.",
+          evidenceFileName: target?.counterEvidenceName ?? "",
+        });
       },
       addGanttActivity(input) {
         setGantt((current) => [
@@ -1848,19 +2063,20 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           ),
         );
       },
-      importSchedule(rows) {
+      importSchedule(rows, targetProjectId) {
+        const id = targetProjectId || project.id;
         const stamp = Date.now();
         const imported = rows.map((row, index) =>
           normalizeGanttActivity({
             ...row,
             id: `g-${stamp}-${index}`,
-            projectId: project.id,
+            projectId: id,
             progress: 0,
           }),
         );
-        setGantt((current) => [...current.filter((item) => item.projectId !== project.id), ...imported]);
+        setGantt((current) => [...current.filter((item) => item.projectId !== id), ...imported]);
         setProjects((current) =>
-          current.map((item) => (item.id === project.id ? { ...item, scheduleExample: false } : item)),
+          current.map((item) => (item.id === id ? { ...item, scheduleExample: false } : item)),
         );
         return imported.length;
       },
@@ -1868,9 +2084,19 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         const activity = gantt.find((item) => item.id === input.taskId && item.projectId === project.id);
         if (!activity) return false;
         const projectRows = gantt.filter((item) => item.projectId === project.id);
-        const needsFile = isFieldEvidenceActivity(activity, projectRows) && !individual;
+        const closure = input.closure ?? "parcial";
+        const counts = closure === "parcial" || closure === "conforme";
+        const needsFile =
+          (isFieldEvidenceActivity(activity, projectRows) && !individual) ||
+          ((input.nature ?? activity.nature) === "archivo" && counts);
         if (needsFile && !input.evidenceName) return false;
-        const validated = individual || !isFieldEvidenceActivity(activity, projectRows);
+        if ((closure === "prerequisito" || closure === "no_conforme") && (input.note?.trim().length ?? 0) < 8) {
+          return false;
+        }
+        const acceptedNow =
+          counts && (individual || !isFieldEvidenceActivity(activity, projectRows));
+        const evidenceStatus =
+          closure === "no_conforme" ? "rejected" : closure === "prerequisito" ? "uploaded" : acceptedNow ? "validated" : "uploaded";
         const report: ProgressReport = {
           id: `pr-${Date.now()}`,
           projectId: project.id,
@@ -1881,32 +2107,49 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           actualCost: input.actualCost,
           evidenceId: input.evidenceName ? `ev-${Date.now()}` : null,
           evidenceName: input.evidenceName || (individual ? "Registro de avance (autocontrol)" : "Registro de avance"),
-          evidenceStatus: validated ? "validated" : "uploaded",
+          evidenceStatus,
           clientEventId: `evt-${Date.now()}`,
           note: input.note,
+          closure,
+          pieceIds: input.pieceIds ?? [],
         };
         setReports((current) => [...current, report]);
         setWorkBook((current) => [
           ...current,
           entryFromProgressReport(report, activity, nextFolio(current, project.id)),
         ]);
-        if (validated) {
-          setGantt((current) =>
-            current.map((item) =>
-              item.id === activity.id
-                ? { ...item, progress: Math.max(item.progress, Math.round(input.physicalPercent * 100)) }
-                : item,
-            ),
-          );
-        }
+        setGantt((current) =>
+          current.map((item) => {
+            if (item.id !== activity.id) return item;
+            const next = {
+              ...item,
+              scopeNote: input.scopeNote ?? item.scopeNote,
+              doneWhen: input.doneWhen ?? item.doneWhen,
+              nature: input.nature ?? item.nature,
+              pieces: input.pieces ?? item.pieces,
+              progress:
+                evidenceStatus === "validated"
+                  ? Math.max(item.progress, Math.round(input.physicalPercent * 100))
+                  : item.progress,
+            };
+            return normalizeGanttActivity(next);
+          }),
+        );
         return true;
       },
-      completeWorkPackage(activityId) {
+      completeWorkPackage(activityId, input) {
+        const note = input.note?.trim() ?? "";
+        const evidenceName = input.evidenceName?.trim() ?? "";
+        if (note.length < 8 && !evidenceName) return 0;
         const projectRows = gantt.filter((item) => item.projectId === project.id);
         const target = projectRows.find((item) => item.id === activityId);
         if (!target) return 0;
         const pending = leafDescendants(target, projectRows).filter((item) => item.progress < 100);
         if (!pending.length) return 0;
+        const reason =
+          note.length >= 8
+            ? note
+            : `Cierre de ${target.code || target.name} con el archivo ${evidenceName}.`;
         const stamp = Date.now();
         const added: ProgressReport[] = pending.map((leaf, index) => ({
           id: `pr-${stamp}-${index}`,
@@ -1916,11 +2159,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           period: new Date().toISOString().slice(0, 10),
           physicalPercent: 1,
           actualCost: 0,
-          evidenceId: `ev-${stamp}-${index}`,
-          evidenceName: `Cierre de paquete ${target.code || target.name}`,
-          evidenceStatus: "validated",
+          evidenceId: evidenceName ? `ev-${stamp}-${index}` : null,
+          evidenceName: evidenceName || "Justificación de cierre",
+          evidenceStatus: "validated" as const,
           clientEventId: `evt-${stamp}-${index}`,
-          note: `Paquete ${target.code || target.name} cerrado en autocontrol.`,
+          note: reason,
         }));
         const doneIds = new Set(pending.map((item) => item.id));
         setReports((current) => [...current, ...added]);
@@ -1934,7 +2177,99 @@ export function OrgProvider({ children }: { children: ReactNode }) {
           });
           return [...current, ...extra];
         });
+        const client = clients.find((item) => item.id === project.clientId);
+        const entry: KnowledgeEntry = {
+          id: `kb-pkg-${stamp}`,
+          createdAt: new Date().toISOString(),
+          projectId: project.id,
+          projectName: project.name,
+          clientId: project.clientId,
+          clientName: client?.name ?? "",
+          activityType: tenant.activityType,
+          areaId: "",
+          areaName: individual ? "Individual" : "Obra",
+          role: sessionUser.role,
+          stance: "ok",
+          comment: reason,
+          evidenceFileName: evidenceName,
+          proposalTitle: `Cierre de paquete ${target.code || target.name}`,
+          scope: "proyecto",
+          moment: "durante",
+          source: "paquete",
+          activityCode: target.code,
+          activityName: target.name,
+        };
+        setKnowledge((current) => [...current, entry]);
         return pending.length;
+      },
+      addKnowledgeRecord(input) {
+        const comment = input.comment.trim();
+        if (comment.length < 8) return false;
+        const evidenceFileName = input.evidenceFileName?.trim() ?? "";
+        const now = new Date().toISOString();
+        let projectId = "";
+        let projectName = "";
+        let clientId = "";
+        let clientName = "";
+        if (input.scope === "proyecto") {
+          const chosen = projects.find((item) => item.id === input.projectId);
+          if (!chosen) return false;
+          const client = clients.find((item) => item.id === chosen.clientId);
+          projectId = chosen.id;
+          projectName = chosen.name;
+          clientId = chosen.clientId;
+          clientName = client?.name ?? "";
+        } else if (input.scope === "cliente") {
+          const client = clients.find((item) => item.id === input.clientId);
+          if (!client) return false;
+          clientId = client.id;
+          clientName = client.name;
+        }
+        const scopeTitle =
+          input.scope === "empresa" ? tenant.name || "Empresa" : input.scope === "cliente" ? clientName : projectName;
+        const entry: KnowledgeEntry = {
+          id: `kb-${Date.now()}`,
+          createdAt: now,
+          projectId,
+          projectName,
+          clientId,
+          clientName,
+          activityType: tenant.activityType,
+          areaId: "",
+          areaName: input.scope === "empresa" ? tenant.name || "Empresa" : individual ? "Individual" : "Obra",
+          role: sessionUser.role,
+          stance: "ok",
+          comment,
+          evidenceFileName,
+          proposalTitle: scopeTitle,
+          scope: input.scope,
+          moment: input.moment,
+          source: "manual",
+        };
+        setKnowledge((current) => [...current, entry]);
+        return true;
+      },
+      addMinute(input) {
+        const body = input.body.trim();
+        const amount = input.costEffect === "sin_costo" ? 0 : Math.round(input.amountClp || 0);
+        if (body.length < 8) return false;
+        if (input.costEffect !== "sin_costo" && amount <= 0) return false;
+        const entry: SiteMinute = {
+          id: `min-${Date.now()}`,
+          projectId: project.id,
+          occurredOn: input.occurredOn || new Date().toISOString().slice(0, 10),
+          origin: input.origin,
+          issuer: input.issuer.trim(),
+          body,
+          activityId: input.activityId ?? "",
+          costEffect: input.costEffect,
+          amountClp: amount,
+          evidenceFileName: input.evidenceFileName ?? "",
+          recordedBy: sessionUser.id,
+          recordedAt: new Date().toISOString(),
+        };
+        setMinutes((current) => [...current, entry]);
+        return true;
       },
       setWorkBookBoardStatus(id, status) {
         const entry = workBook.find((item) => item.id === id);
@@ -2010,6 +2345,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         );
         const report = reports.find((item) => item.id === reportId);
         if (!report || status !== "validated") return;
+        if (report.closure === "prerequisito" || report.closure === "no_conforme") return;
         setGantt((current) =>
           current.map((item) =>
             item.id === report.taskId
@@ -2628,6 +2964,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setClients([]);
         setKickoffs([]);
         setKnowledge([]);
+        setBudgetEvents([]);
         setInvites([]);
         setProfiles(applyOwnerCoverage(initialProfiles));
         setAreas(initialAreas);
@@ -2645,6 +2982,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setGantt([]);
         setReports([]);
         setWorkBook([]);
+        setMinutes([]);
+        setPaymentCuts([]);
         setWorkBookMetas([]);
         setQualityChecks([]);
         setNonconformities([]);
@@ -2688,6 +3027,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       clients,
       kickoffs,
       knowledge,
+      budgetEvents,
       invites,
       areas,
       users,
@@ -2698,6 +3038,8 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       gantt,
       reports,
       workBook,
+      minutes,
+      paymentCuts,
       workBookMetas,
       qualityChecks,
       nonconformities,

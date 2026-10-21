@@ -6,10 +6,12 @@ import type {
   ProjectKickoff,
   Tenant,
   TenantUser,
+  WorkBookBoardStatus,
   WorkBookEntry,
   WorkBookKind,
   WorkBookMeta,
   WorkBookSafetyLevel,
+  WorkBookSource,
   WorkBookThirdPartyKind,
 } from "./types";
 import { ROLE_LABELS } from "./constants";
@@ -58,6 +60,29 @@ export const THIRD_PARTY_KINDS: { id: Exclude<WorkBookThirdPartyKind, "">; label
   { id: "claim", label: "Reclamo" },
   { id: "interference", label: "Interferencia" },
 ];
+
+export const WORK_BOOK_BOARD_COLUMNS: {
+  id: WorkBookBoardStatus;
+  label: string;
+  hint: string;
+}[] = [
+  { id: "open", label: "Por atender", hint: "Entradas y bloqueos sin resolver" },
+  { id: "doing", label: "En faena", hint: "Lo que estás ejecutando ahora" },
+  { id: "closed", label: "Cerrado", hint: "Autocontrol: lo das por cumplido" },
+];
+
+export function defaultBoardStatus(kind: WorkBookKind, source: WorkBookSource = "manual"): WorkBookBoardStatus {
+  if (kind === "progress" || source === "progress") return "doing";
+  return "open";
+}
+
+export function isWorkBookBlocker(entry: Pick<WorkBookEntry, "kind" | "safetyLevel" | "thirdPartyKind" | "boardStatus">) {
+  if (entry.boardStatus === "closed") return false;
+  if (entry.kind === "ito") return true;
+  if (entry.kind === "safety" && (entry.safetyLevel === "observation" || entry.safetyLevel === "incident")) return true;
+  if (entry.kind === "third_party" && entry.thirdPartyKind === "interference") return true;
+  return false;
+}
 
 export const WEATHER_OPTIONS = [
   { id: "", label: "No indica" },
@@ -116,6 +141,7 @@ export function emptyWorkBookEntry(projectId: string, kind: WorkBookKind, folio:
     thirdPartyKind: "",
     thirdPartyName: "",
     activityId: "",
+    boardStatus: defaultBoardStatus(kind),
   };
 }
 
@@ -145,6 +171,10 @@ export function normalizeWorkBookEntry(raw: Partial<WorkBookEntry> | null | unde
     thirdPartyKind: raw?.thirdPartyKind ?? fallback?.thirdPartyKind ?? "",
     thirdPartyName: raw?.thirdPartyName ?? fallback?.thirdPartyName ?? "",
     activityId: raw?.activityId ?? fallback?.activityId ?? "",
+    boardStatus:
+      raw?.boardStatus === "open" || raw?.boardStatus === "doing" || raw?.boardStatus === "closed"
+        ? raw.boardStatus
+        : fallback?.boardStatus ?? defaultBoardStatus(kind, raw?.source === "progress" ? "progress" : "manual"),
   };
 }
 
@@ -198,6 +228,7 @@ export function entryFromProgressReport(
     thirdPartyKind: "",
     thirdPartyName: "",
     activityId: report.taskId,
+    boardStatus: "doing",
   };
 }
 
@@ -229,6 +260,16 @@ export function workBookCounts(entries: WorkBookEntry[]) {
       return acc;
     },
     { ito: 0, progress: 0, safety: 0, third_party: 0 } as Record<WorkBookKind, number>,
+  );
+}
+
+export function workBookBoardCounts(entries: WorkBookEntry[]) {
+  return WORK_BOOK_BOARD_COLUMNS.reduce(
+    (acc, column) => {
+      acc[column.id] = entries.filter((item) => item.boardStatus === column.id).length;
+      return acc;
+    },
+    { open: 0, doing: 0, closed: 0 } as Record<WorkBookBoardStatus, number>,
   );
 }
 

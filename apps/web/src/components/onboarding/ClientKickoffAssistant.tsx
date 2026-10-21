@@ -7,6 +7,7 @@ import { formatClp, parseClpInput, registeredBudgetClp } from "@/lib/evm";
 import {
   INDIVIDUAL_KICKOFF_QUESTIONS,
   addCalendarDays,
+  antecedentsReady,
   canEditPmNotes,
   canEditSoldExtract,
   commercialDeliveryReady,
@@ -15,11 +16,15 @@ import {
   emptyProposal,
   evaluateInternalGate,
 } from "@/lib/kickoff";
+import { isPdfFile, saveProposalFile, saveScheduleFile } from "@/lib/proposal-file";
+import { downloadBlob, shiftTemplateRows } from "@/lib/schedule-csv";
+import { buildCombinedScheduleFile, parseScheduleUpload } from "@/lib/schedule-workbook";
+import { AntecedentPreview, AntecedentsStep } from "@/components/onboarding/AntecedentsStep";
 import { KickoffAreaPanel } from "@/components/onboarding/KickoffAreaPanel";
 import { IndividualInternalKickoff } from "@/components/onboarding/IndividualInternalKickoff";
 import type { Client, KickoffProposal, OrgArea, Project, ProjectKickoff } from "@/lib/types";
 
-type Step = "client" | "project" | "internal" | "clientKickoff";
+type Step = "client" | "project" | "antecedentes" | "internal" | "clientKickoff";
 
 export function ClientKickoffAssistant({
   onStarted,
@@ -35,6 +40,7 @@ export function ClientKickoffAssistant({
   const {
     clients,
     projects,
+    gantt,
     areas,
     users,
     addClient,
@@ -42,6 +48,7 @@ export function ClientKickoffAssistant({
     addClientProject,
     updateClientProject,
     saveKickoff,
+    importSchedule,
     stampCommercialKickoff,
     confirmInternalKickoff,
     openClientKickoff,
@@ -63,7 +70,9 @@ export function ClientKickoffAssistant({
       ? "project"
       : resumed.kickoffPhase === "internal_done" || resumed.kickoffPhase === "client_done"
         ? "clientKickoff"
-        : "internal"
+        : antecedentsReady(resumedKickoff)
+          ? "internal"
+          : "antecedentes"
     : clientOnly
       ? "project"
       : "client";
@@ -107,6 +116,7 @@ export function ClientKickoffAssistant({
     () => [
       { id: "client" as const, label: "Cliente" },
       { id: "project" as const, label: "Proyecto" },
+      { id: "antecedentes" as const, label: "Antecedentes" },
       { id: "internal" as const, label: "Kickoff interno" },
       { id: "clientKickoff" as const, label: "Kickoff cliente" },
     ],
@@ -133,16 +143,62 @@ export function ClientKickoffAssistant({
   }
 
   function onProposalFile(file: File) {
+    if (!isPdfFile(file)) {
+      setError("El documento El proyecto debe ser un PDF.");
+      return;
+    }
+    setError(null);
     patchProposal({
       fileName: file.name,
-      fileType: file.type,
+      fileType: file.type || "application/pdf",
       fileSize: file.size,
-      title: merged.proposal?.title || file.name.replace(/\.[^.]+$/, ""),
+      title: merged.proposal?.title || "El proyecto",
       uploadedBy: sessionUser.id,
       uploadedAt: new Date().toISOString(),
     });
-    if (file.type.startsWith("text/") || /\.(md|txt|csv)$/i.test(file.name)) {
-      void file.text().then((text) => patchProposal({ body: text }));
+    if (projectId) void saveProposalFile(projectId, file);
+  }
+
+  function downloadScheduleTemplate() {
+    const current = projects.find((item) => item.id === projectId);
+    const start = current?.startDate || startDate;
+    const finish = current?.finishDate || finishDate;
+    const file = buildCombinedScheduleFile(
+      {
+        projectName: current?.name || projectName,
+        projectCode: current?.code || projectCode,
+        start,
+        finish,
+        example: true,
+        budgetClp: current ? registeredBudgetClp(current) : parseClpInput(initialBudget),
+      },
+      shiftTemplateRows(start, finish),
+    );
+    downloadBlob(file.filename, file.blob);
+  }
+
+  async function loadBaselineSchedule(file: File) {
+    if (!projectId) return { ok: false, message: "Crea el proyecto antes de subir el cronograma." };
+    try {
+      const { rows, errors } = await parseScheduleUpload(file);
+      if (!rows.length) {
+        return { ok: false, message: errors[0] || "El archivo no tiene filas de cronograma." };
+      }
+      const count = importSchedule(rows, projectId);
+      await saveScheduleFile(projectId, file);
+      patchDraft({ baselineScheduleName: file.name });
+      saveKickoff(projectId, { baselineScheduleName: file.name });
+      return {
+        ok: true,
+        message: errors.length
+          ? `Línea base cargada: ${count} elementos. ${errors.length} filas se omitieron.`
+          : `Línea base cargada: ${count} elementos. Reemplaza el cronograma de ejemplo.`,
+      };
+    } catch {
+      return {
+        ok: false,
+        message: "No se pudo leer el archivo. Usa la plantilla Excel o un CSV con las mismas columnas.",
+      };
     }
   }
 
@@ -255,6 +311,22 @@ export function ClientKickoffAssistant({
       plannedFinishDate: finishDate,
     });
     setError(null);
+    setStep("antecedentes");
+  }
+
+  function continueAntecedents() {
+    if (!projectId) return;
+    const payload = { ...kickoffFor(projectId), ...draft } as ProjectKickoff;
+    if (!antecedentsReady(payload)) {
+      setError("Carga el documento El proyecto y escribe las condiciones del servicio vendido.");
+      return;
+    }
+    saveKickoff(projectId, {
+      proposal: payload.proposal,
+      antecedentItems: draft.antecedentItems ?? [],
+      commercialCommitment: payload.proposal.body.trim(),
+    });
+    setError(null);
     setStep("internal");
   }
 
@@ -297,12 +369,61 @@ export function ClientKickoffAssistant({
     setError(null);
   }
 
-  function confirmIndividualInternal() {
+  function formalizeInternal() {
+    if (!projectId) return;
+    const name = (draft.internalSignerName || sessionUser.name || "").trim();
+    if (name.length < 3) {
+      setError("Escribe el nombre de quien formaliza el kickoff interno.");
+      return;
+    }
+    const signedAt = new Date().toISOString();
+    const today = signedAt.slice(0, 10);
+    const extra: Partial<ProjectKickoff> = {
+      internalSignerName: name,
+      internalSignedAt: signedAt,
+      internalDate: draft.internalDate || today,
+      clientKickoffDueDate: draft.clientKickoffDueDate || addCalendarDays(today, 7),
+      internalConfirmedAt: signedAt,
+    };
+    patchDraft(extra);
+    saveKickoff(projectId, extra);
+    if (isIndividualMode) {
+      confirmIndividualInternal(extra);
+      return;
+    }
+    const payload = { ...kickoffFor(projectId), ...draft, ...extra } as ProjectKickoff;
+    if (!antecedentsReady(payload)) {
+      setError("Vuelve a antecedentes y carga el documento El proyecto con las condiciones del servicio.");
+      return;
+    }
+    if (!commercialDone) {
+      const stamped = stampCommercialKickoff(projectId, payload, sessionUser.id);
+      if (!stamped) {
+        setError("No se pudo registrar el documento. Revisa las condiciones del servicio.");
+        return;
+      }
+      patchDraft({
+        commercialDeliveredBy: sessionUser.id,
+        commercialDeliveredAt: signedAt,
+      });
+    }
+    setError(null);
+  }
+
+  function confirmIndividualInternal(extra?: Partial<ProjectKickoff>) {
     if (!projectId) return;
     const stored = kickoffFor(projectId);
+    const signer = (extra?.internalSignerName || draft.internalSignerName || sessionUser.name || "").trim();
+    if (signer.length < 3) {
+      setError("Escribe el nombre de quien formaliza el kickoff interno.");
+      return;
+    }
     const payload = {
       ...stored,
       ...draft,
+      ...extra,
+      internalSignerName: signer,
+      internalSignedAt: extra?.internalSignedAt || draft.internalSignedAt || new Date().toISOString(),
       areaReviews: stored?.areaReviews ?? [],
       proposal: stored?.proposal ?? draft.proposal,
       internalEvalAnswers: {
@@ -333,7 +454,9 @@ export function ClientKickoffAssistant({
       commercialDeliveredAt: new Date().toISOString(),
       pmValidatedBy: sessionUser.id,
       pmValidatedAt: new Date().toISOString(),
-      internalConfirmedAt: new Date().toISOString(),
+      internalConfirmedAt: payload.internalConfirmedAt,
+      internalSignerName: payload.internalSignerName,
+      internalSignedAt: payload.internalSignedAt,
     });
     setError(null);
   }
@@ -372,8 +495,18 @@ export function ClientKickoffAssistant({
 
   function submitClientKickoff() {
     if (!projectId) return;
-    saveKickoff(projectId, draft);
-    const ok = confirmClientKickoff(projectId, draft);
+    const dates = (draft.paymentDates ?? []).map((item) => item.trim()).filter(Boolean);
+    if (draft.paymentsAgreed == null) {
+      setError("Indica si en la reunión se fijaron plazos de pago.");
+      return;
+    }
+    if (draft.paymentsAgreed && dates.length === 0) {
+      setError("Agrega al menos una fecha de estado de pago conversada con el cliente.");
+      return;
+    }
+    const payload = { ...draft, paymentDates: draft.paymentsAgreed ? dates : [] };
+    saveKickoff(projectId, payload);
+    const ok = confirmClientKickoff(projectId, payload);
     if (!ok) {
       setError("Registra los acuerdos con el cliente para dejar el kickoff cerrado. Si la obra ya está en curso, puedes saltar al cronograma.");
       return;
@@ -457,7 +590,7 @@ export function ClientKickoffAssistant({
             <h2 className="text-lg font-semibold">Proyecto del cliente</h2>
             <p className="mt-1 text-sm text-slate-600">
               Identificación de la obra y presupuesto inicial. El cronograma de ejemplo se arma con ese monto.
-              El kickoff interno y el del cliente son opcionales: si la obra ya está en curso, puedes saltarlos.
+              El paso siguiente carga los antecedentes mínimos antes del kickoff interno.
             </p>
           </div>
           <label className="block text-sm">
@@ -518,6 +651,23 @@ export function ClientKickoffAssistant({
         </div>
       ) : null}
 
+      {step === "antecedentes" && projectId ? (
+        <AntecedentsStep
+          projectId={projectId}
+          draft={draft}
+          activities={gantt.filter((item) => item.projectId === projectId)}
+          scheduleExample={projects.find((item) => item.id === projectId)?.scheduleExample ?? true}
+          onConditions={(body) => patchProposal({ body, title: draft.proposal?.title || "El proyecto" })}
+          onFile={onProposalFile}
+          onItems={(antecedentItems) => {
+            patchDraft({ antecedentItems });
+            saveKickoff(projectId, { antecedentItems });
+          }}
+          onDownloadTemplate={downloadScheduleTemplate}
+          onScheduleFile={loadBaselineSchedule}
+        />
+      ) : null}
+
       {step === "internal" && isIndividualMode ? (
         <IndividualInternalKickoff
           draft={draft}
@@ -539,13 +689,25 @@ export function ClientKickoffAssistant({
           <div>
             <h2 className="text-lg font-semibold">Kickoff interno</h2>
             <p className="mt-1 text-sm text-slate-600">
-              El administrador o el gestor registran el extracto. No hace falta un área comercial. Las demás áreas
-              pueden comentar. Este paso es opcional si estás migrando una obra en curso.
+              Coordina la gestión con los antecedentes ya cargados. Las áreas completan lo que falta para operar el
+              proyecto. La firma formaliza este registro antes del kickoff con el cliente.
             </p>
           </div>
 
+          {projectId ? (
+            <AntecedentPreview
+              projectId={projectId}
+              fileName={draft.proposal?.fileName ?? ""}
+              fileType={draft.proposal?.fileType ?? ""}
+              activities={gantt.filter((item) => item.projectId === projectId)}
+              items={draft.antecedentItems ?? []}
+              baselineScheduleName={draft.baselineScheduleName ?? ""}
+              scheduleExample={projects.find((item) => item.id === projectId)?.scheduleExample ?? false}
+            />
+          ) : null}
+
           <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/60 p-3">
-            <h3 className="font-semibold">1. Extracto de lo vendido</h3>
+            <h3 className="font-semibold">Condiciones que comentan las áreas</h3>
             <label className="block text-sm">
               <span className="mb-1 block font-medium">Extracto que comentan las áreas</span>
               <textarea
@@ -557,22 +719,11 @@ export function ClientKickoffAssistant({
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 disabled:bg-slate-50"
               />
             </label>
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium">Documento (opcional)</span>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,application/pdf"
-                disabled={clientLocked || !canStampCommercial}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) onProposalFile(file);
-                }}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
-              />
-              {draft.proposal?.fileName ? (
-                <span className="mt-1 block text-xs text-slate-600">Adjunto: {draft.proposal.fileName}</span>
-              ) : null}
-            </label>
+            {draft.proposal?.fileName ? (
+              <p className="text-xs text-slate-600">Documento El proyecto: {draft.proposal.fileName}</p>
+            ) : (
+              <p className="text-xs text-amber-800">Falta el documento. Vuelve al paso de antecedentes.</p>
+            )}
             {canStampCommercial && !clientLocked ? (
               <button
                 type="button"
@@ -697,7 +848,7 @@ export function ClientKickoffAssistant({
             </label>
             {canEditPm ? (
               <p className="text-xs text-amber-950">
-                Los comentarios del gestor quedan en el expediente. No hay que confirmar para continuar.
+                Los comentarios del gestor quedan en el expediente junto con los antecedentes.
               </p>
             ) : (
               <p className="text-xs text-slate-600">
@@ -706,16 +857,39 @@ export function ClientKickoffAssistant({
             )}
           </section>
 
+          <section className="space-y-3 rounded-xl border border-slate-200 p-3">
+            <h3 className="font-semibold">Firma y formalización</h3>
+            <p className="text-xs text-slate-600">
+              Con el documento, el cronograma y las consideraciones, quien coordina deja su nombre. Esa firma habilita
+              el kickoff con el cliente y el cierre de la fase 1.
+            </p>
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium">Nombre de quien formaliza</span>
+              <input
+                value={draft.internalSignerName ?? ""}
+                onChange={(event) => patchDraft({ internalSignerName: event.target.value })}
+                placeholder={sessionUser.name}
+                className="w-full rounded-md border border-slate-200 px-3 py-2"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={formalizeInternal}
+              disabled={Boolean(draft.internalSignedAt)}
+              className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-40"
+            >
+              {draft.internalSignedAt ? "Kickoff interno formalizado" : "Formalizar kickoff interno"}
+            </button>
+          </section>
+
           {gate.canMeetClient ? (
             <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">
-              Extracto y plazo listos. Puedes continuar al kickoff con el cliente o saltar al cronograma si la
-              obra ya está en curso.
+              Antecedentes y firma listos. Puedes continuar al kickoff con el cliente para cerrar la fase 1.
             </p>
           ) : (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-              {(gate.reasons.find((item) => !item.startsWith("Comentarios aún")) ||
-                "Para el kickoff interno registra el extracto, la fecha de consulta y el plazo con el cliente.") +
-                " Si la obra ya está en desarrollo, puedes saltarlo e ir al cronograma."}
+              {gate.reasons.find((item) => !item.startsWith("Comentarios aún")) ||
+                "Carga los antecedentes y formaliza el kickoff interno antes de ir con el cliente."}
             </p>
           )}
         </div>
@@ -726,13 +900,18 @@ export function ClientKickoffAssistant({
           <div>
             <h2 className="text-lg font-semibold">Kickoff con el cliente</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Opcional. El administrador o el gestor registran los acuerdos con el cliente. El cronograma ya se
-              puede usar si saltaste el kickoff para migrar una obra en curso.
+              Con los antecedentes y la formalización interna, registra los acuerdos con el cliente. Eso cierra la
+              fase 1.
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
             <p className="font-medium">Registro interno</p>
-            <p className="mt-1">
+            <p className="mt-1">Documento: {draft.proposal?.fileName || "—"}</p>
+            <p>
+              Firma: {draft.internalSignerName || "—"}
+              {draft.internalSignedAt ? ` · ${draft.internalSignedAt.slice(0, 10)}` : ""}
+            </p>
+            <p>
               Extracto: {merged.commercialDeliveredAt ? personName(merged.commercialDeliveredBy) : "—"}
             </p>
             {!isIndividualMode ? (
@@ -812,6 +991,70 @@ export function ClientKickoffAssistant({
               className="w-full rounded-md border border-slate-200 px-3 py-2"
             />
           </label>
+          <fieldset className="space-y-2 rounded-xl border border-slate-200 p-3">
+            <legend className="px-1 text-sm font-medium">Plazos de pago</legend>
+            <p className="text-xs text-slate-600">
+              Si en esta reunión se fijan fechas, quedan como estados de pago en el tablero. Si no se fijan,
+              el administrador las agrega después. El corte semanal se ve en ambos casos.
+            </p>
+            <div className="flex flex-col gap-2 text-sm sm:flex-row sm:gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="paymentsAgreed"
+                  checked={draft.paymentsAgreed === true}
+                  onChange={() =>
+                    patchDraft({
+                      paymentsAgreed: true,
+                      paymentDates: draft.paymentDates?.length ? draft.paymentDates : [""],
+                    })
+                  }
+                />
+                Se fijaron plazos
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="paymentsAgreed"
+                  checked={draft.paymentsAgreed === false}
+                  onChange={() => patchDraft({ paymentsAgreed: false, paymentDates: [] })}
+                />
+                No se fijaron
+              </label>
+            </div>
+            {draft.paymentsAgreed ? (
+              <div className="space-y-2">
+                {(draft.paymentDates ?? [""]).map((date, index) => (
+                  <label key={`pago-${index}`} className="block text-sm">
+                    <span className="mb-1 block font-medium">Fecha {index + 1}</span>
+                    <input
+                      type="date"
+                      lang="es-CL"
+                      value={date}
+                      onChange={(event) => {
+                        const paymentDates = [...(draft.paymentDates ?? [""])];
+                        paymentDates[index] = event.target.value;
+                        patchDraft({ paymentDates });
+                      }}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 sm:max-w-xs"
+                    />
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => patchDraft({ paymentDates: [...(draft.paymentDates ?? []), ""] })}
+                  className="text-sm font-medium text-[var(--brand)] underline"
+                >
+                  Agregar otra fecha
+                </button>
+              </div>
+            ) : null}
+            {draft.paymentsAgreed === false ? (
+              <p className="text-xs text-amber-900">
+                El administrador debe cargar las fechas en el tablero para marcar los estados de pago.
+              </p>
+            ) : null}
+          </fieldset>
         </div>
       ) : null}
 
@@ -823,7 +1066,8 @@ export function ClientKickoffAssistant({
           onClick={() => {
             if (step === "client") onCancel?.();
             else if (step === "project") setStep("client");
-            else if (step === "internal") setStep("project");
+            else if (step === "antecedentes") setStep("project");
+            else if (step === "internal") setStep("antecedentes");
             else setStep("internal");
           }}
           className="rounded-md border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50"
@@ -845,19 +1089,25 @@ export function ClientKickoffAssistant({
             onClick={() => {
               if (step === "client") submitClient();
               else if (step === "project") submitProject();
+              else if (step === "antecedentes") continueAntecedents();
               else if (step === "internal") goToClientKickoff();
               else submitClientKickoff();
             }}
-            disabled={step === "internal" && !gate.canMeetClient}
+            disabled={
+              (step === "antecedentes" && !antecedentsReady({ proposal: draft.proposal } as ProjectKickoff)) ||
+              (step === "internal" && !gate.canMeetClient)
+            }
             className="rounded-md bg-[var(--brand)] px-4 py-2 text-sm text-white hover:bg-[var(--brand-dark)] disabled:opacity-40"
           >
             {step === "clientKickoff"
-              ? "Registrar kickoff con el cliente"
+              ? "Cerrar fase 1"
               : step === "internal"
                 ? "Continuar al kickoff con el cliente"
-                : step === "project"
-                  ? "Continuar al kickoff (opcional)"
-                  : "Continuar"}
+                : step === "antecedentes"
+                  ? "Continuar al kickoff interno"
+                  : step === "project"
+                    ? "Continuar a antecedentes"
+                    : "Continuar"}
           </button>
         </div>
       </div>
@@ -880,6 +1130,10 @@ function seedDraft(
     commercialDeliveredBy: resumedKickoff?.commercialDeliveredBy ?? "",
     commercialDeliveredAt: resumedKickoff?.commercialDeliveredAt ?? null,
     proposal: resumedKickoff?.proposal ?? emptyProposal(),
+    antecedentItems: resumedKickoff?.antecedentItems ?? [],
+    baselineScheduleName: resumedKickoff?.baselineScheduleName ?? "",
+    internalSignerName: resumedKickoff?.internalSignerName ?? "",
+    internalSignedAt: resumedKickoff?.internalSignedAt ?? null,
     areaReviews: resumedKickoff?.areaReviews ?? [],
     finalProposalToClient: resumedKickoff?.finalProposalToClient ?? "",
     plannedStartDate: resumedKickoff?.plannedStartDate || resumed?.startDate || "",
@@ -902,6 +1156,9 @@ function seedDraft(
     clientDate: resumedKickoff?.clientDate ?? "",
     clientAttendees: resumedKickoff?.clientAttendees ?? "",
     clientAgreements: resumedKickoff?.clientAgreements ?? "",
+    paymentsAgreed: resumedKickoff?.paymentsAgreed ?? null,
+    paymentNote: resumedKickoff?.paymentNote ?? "",
+    paymentDates: resumedKickoff?.paymentDates ?? [],
   };
 }
 

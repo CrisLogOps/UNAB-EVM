@@ -3,16 +3,20 @@
 import { useState } from "react";
 import { DataTable } from "@/components/data/DataTable";
 import { ModalForm } from "@/components/forms/ModalForm";
+import { BudgetHistory } from "@/components/views/BudgetHistory";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { formatClp, formatUf, formatUsd } from "@/lib/evm";
 import type { Project } from "@/lib/types";
 
 export function PmBudgetReviewView() {
-  const { visibleProjects, acceptBudget, counterBudget, canOperate } = useOrg();
+  const { visibleProjects, project, budgetEvents, acceptBudget, counterBudget, canOperate } = useOrg();
   const [counter, setCounter] = useState<Project | null>(null);
   const queue = visibleProjects.filter(
-    (item) => item.status === "budget_proposed" || item.status === "budget_counter",
+    (item) =>
+      item.id !== "prj-pending" &&
+      ((item.proposedBac ?? 0) > 0 || (item.counterBac ?? 0) > 0 || item.bac > 0),
   );
+  const openForReview = (item: Project) => !item.bac && item.status !== "pending_approval";
 
   return (
     <div className="space-y-4">
@@ -20,8 +24,8 @@ export function PmBudgetReviewView() {
         <p className="text-xs uppercase tracking-wide text-slate-500">Revisa la cifra antes de enviarla</p>
         <h1 className="text-2xl font-semibold">Revisar presupuesto</h1>
         <p className="text-sm text-slate-600">
-          Puedes aceptar lo que cargó Finanzas o mandar otra cifra. El cierre lo da el administrador
-          (Comercial puede firmar junto con él).
+          El monto inicial es lo que el administrador cargó al crear la obra. Acéptalo o manda otra cifra
+          con un archivo. Esa razón queda en el historial y en Conocimiento, para la próxima venta.
         </p>
       </div>
 
@@ -30,7 +34,7 @@ export function PmBudgetReviewView() {
           { key: "name", header: "Proyecto", accessor: "name" },
           {
             key: "proposed",
-            header: "Propuesta Finanzas",
+            header: "Monto cargado",
             render: (row) => (row.proposedBac ? formatClp(row.proposedBac) : "—"),
           },
           {
@@ -56,11 +60,13 @@ export function PmBudgetReviewView() {
                   label: "Aceptar y enviar a visto bueno",
                   variant: "view" as const,
                   onClick: (row) => acceptBudget(row.id),
+                  hidden: (row: Project) => !openForReview(row),
                 },
                 {
                   label: "Contrapropuesta",
                   variant: "edit" as const,
                   onClick: (row) => setCounter(row),
+                  hidden: (row: Project) => !openForReview(row),
                 },
               ]
             : []
@@ -71,7 +77,8 @@ export function PmBudgetReviewView() {
         open={Boolean(counter)}
         onClose={() => setCounter(null)}
         title="Contrapropuesta de presupuesto"
-        submitLabel="Enviar a Finanzas"
+        requireEvidence
+        submitLabel="Enviar al administrador"
         fields={[
           {
             name: "amount",
@@ -82,18 +89,24 @@ export function PmBudgetReviewView() {
           },
           {
             name: "note",
-            label: "Fundamento",
+            label: "Por qué cambia la cifra",
             type: "textarea",
             required: true,
-            placeholder: "Ajuste de partidas, recubrimiento, riesgo…",
+            placeholder: "Qué partida cambia y por qué el monto cargado no alcanza",
           },
         ]}
-        onSubmit={(values) => {
-          if (!counter) return;
-          counterBudget(counter.id, Number(values.amount), values.note);
+        validate={(values, file) => {
+          if (values.note.trim().length >= 8 && file) return null;
+          return "Escribe la razón (al menos 8 caracteres) y adjunta el archivo que la sostiene.";
+        }}
+        onSubmit={(values, file) => {
+          if (!counter || !file) return;
+          counterBudget(counter.id, Number(values.amount), values.note, file.name);
           setCounter(null);
         }}
       />
+
+      {project.id !== "prj-pending" ? <BudgetHistory project={project} events={budgetEvents} /> : null}
     </div>
   );
 }

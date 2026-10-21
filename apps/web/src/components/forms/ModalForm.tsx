@@ -25,6 +25,7 @@ interface ModalFormProps {
   optionalEvidence?: boolean;
   fieldEvidence?: boolean;
   submitLabel?: string;
+  validate?: (values: Record<string, string>, file: File | null) => string | null;
   onSubmit: (values: Record<string, string>, file: File | null) => void;
 }
 
@@ -37,6 +38,7 @@ export function ModalForm({
   optionalEvidence = false,
   fieldEvidence = false,
   submitLabel = "Guardar",
+  validate,
   onSubmit,
 }: ModalFormProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -53,6 +55,11 @@ export function ModalForm({
     });
     if (requireEvidence && !file) {
       setError("Falta la evidencia. Sin ella el avance no cuenta.");
+      return;
+    }
+    const invalid = validate?.(values, file);
+    if (invalid) {
+      setError(invalid);
       return;
     }
     setError(null);

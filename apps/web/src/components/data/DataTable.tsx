@@ -16,6 +16,7 @@ export interface TableAction<T> {
   label: string;
   onClick: (row: T) => void;
   variant?: "view" | "edit" | "delete" | "key";
+  hidden?: (row: T) => boolean;
 }
 
 interface DataTableProps<T> {
@@ -110,7 +111,9 @@ export function DataTable<T>({
               </dl>
               {actions.length ? (
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  {actions.map((action) => (
+                  {actions
+                    .filter((action) => !action.hidden?.(row))
+                    .map((action) => (
                     <button
                       key={action.label}
                       type="button"
@@ -162,7 +165,7 @@ export function DataTable<T>({
                   {actions.length ? (
                     <td className="px-3 py-2">
                       <div className="flex gap-1">
-                        {actions.map((action) => {
+                        {actions.filter((action) => !action.hidden?.(row)).map((action) => {
                           const Icon = ACTION_ICON[action.variant ?? "view"];
                           return (
                             <button

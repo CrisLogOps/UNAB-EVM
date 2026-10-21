@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { ProgressView } from "@/components/views/ProgressView";
 
@@ -19,7 +20,9 @@ export default function ProgressPage() {
       ]}
       permission="evidence:upload"
     >
-      <ProgressView />
+      <Suspense fallback={<p className="text-sm text-slate-500">Cargando avance…</p>}>
+        <ProgressView />
+      </Suspense>
     </RoleGate>
   );
 }

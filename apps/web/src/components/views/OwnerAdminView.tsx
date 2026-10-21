@@ -61,7 +61,7 @@ export function OwnerAdminView() {
           <IdCard className="h-5 w-5 text-[var(--accent)]" />
           <p className="mt-2 font-semibold">Puestos</p>
           <p className="text-sm text-slate-600">
-            Adaptar al gerente de proyectos: tareas extra si falta Finanzas o Terreno.
+            El gestor revisa el presupuesto. El administrador carga el monto y los gastos.
           </p>
         </Link>
         <Link href="/areas" className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm hover:border-[var(--accent)]">

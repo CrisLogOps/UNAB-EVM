@@ -15,8 +15,8 @@ const INDIVIDUAL_HIDDEN_HREFS = new Set(["/admin", "/users", "/profiles", "/area
 
 const INDIVIDUAL_MOBILE_BY_HREF: Record<string, number> = {
   "/demo": 1,
-  "/clients": 2,
-  "/progress": 3,
+  "/progress": 2,
+  "/minutas": 3,
   "/gantt": 4,
 };
 
@@ -34,7 +34,7 @@ export const OPERATING_MODE_OPTIONS: {
     description:
       "Trabajas solo. Cubres cliente, kickoff, presupuesto, calendario y el control de la obra. No registras usuarios ni áreas.",
     howItWorks:
-      "Permisos de operación completos, sin pantallas de Personas, Puestos ni Áreas. Puedes pasar a colaborativo cuando quieras. Volver a individual solo si no hay otros usuarios.",
+      "Permisos de operación completos, sin pantallas de Personas, Puestos ni Áreas. Las minutas registran gastos e instrucciones. Puedes pasar a colaborativo cuando quieras. Volver a individual solo si no hay otros usuarios.",
   },
   {
     id: "collaborative",
@@ -51,6 +51,21 @@ export const OPERATING_MODE_LABEL: Record<OperatingMode, string> = {
   individual: "Individual",
   collaborative: "Colaborativo",
 };
+
+export type AppChannel = "development" | "staging";
+
+/** Railway y `next start` quedan en staging. `npm run dev` queda en development. */
+export function appChannel(): AppChannel {
+  const raw = process.env.NEXT_PUBLIC_APP_CHANNEL;
+  if (raw === "staging" || raw === "development") return raw;
+  return process.env.NODE_ENV === "development" ? "development" : "staging";
+}
+
+/** En staging el modo colaborativo no ofrece cambiar «Cómo trabajas». */
+export function showOperatingModeTools(mode: OperatingMode | "") {
+  if (appChannel() === "development") return true;
+  return mode !== "collaborative";
+}
 
 export function resolveOperatingMode(tenant: Pick<Tenant, "operatingMode" | "companySize">): OperatingMode | "" {
   if (tenant.operatingMode === "individual" || tenant.operatingMode === "collaborative") {

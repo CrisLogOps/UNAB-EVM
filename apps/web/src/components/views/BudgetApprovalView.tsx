@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { DataTable } from "@/components/data/DataTable";
+import { BudgetHistory } from "@/components/views/BudgetHistory";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { useRoleContext } from "@/components/layout/RoleProvider";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -9,7 +10,7 @@ import { formatClp, formatUf, formatUsd } from "@/lib/evm";
 import { PROJECT_STATUS_LABEL } from "@/lib/kickoff";
 
 export function BudgetApprovalView() {
-  const { visibleProjects, approveBudget, canOperate } = useOrg();
+  const { visibleProjects, project, budgetEvents, approveBudget, canOperate } = useOrg();
   const { role } = useRoleContext();
   const canApproveBudget = canOperate("budget:approve");
   const queue = visibleProjects.filter((item) => item.status === "pending_approval");
@@ -31,8 +32,8 @@ export function BudgetApprovalView() {
         <p className="text-xs uppercase tracking-wide text-slate-500">Visto bueno de {ROLE_LABELS[role]}</p>
         <h1 className="text-2xl font-semibold">Aprobar presupuesto</h1>
         <p className="text-sm text-slate-600">
-          El administrador valida la cifra. Comercial puede cerrar junto con él. El gestor de proyectos
-          no da este visto bueno: primero Finanzas carga el monto y el gestor lo envía a esta cola.
+          El administrador valida la cifra. Si el gestor mandó otra, aquí se ve su monto, la razón y el
+          archivo. Comercial puede cerrar junto con el administrador. El gestor no da este visto bueno.
         </p>
       </div>
 
@@ -54,7 +55,7 @@ export function BudgetApprovalView() {
 
       {waitingLoad.length && !queue.length && !waitingPm.length ? (
         <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          Todavía no hay un monto cargado. Finanzas lo propone en{" "}
+          Todavía no hay un monto esperando visto bueno. El historial de la obra abierta está abajo. El administrador lo confirma en{" "}
           <Link href="/budget" className="underline">
             Presupuesto
           </Link>
@@ -72,7 +73,7 @@ export function BudgetApprovalView() {
           },
           {
             key: "fin",
-            header: "Finanzas",
+            header: "Monto cargado",
             render: (row) => (row.proposedBac ? formatClp(row.proposedBac) : "—"),
           },
           {
@@ -90,8 +91,13 @@ export function BudgetApprovalView() {
           },
           {
             key: "note",
-            header: "Glosa",
+            header: "Razón",
             accessor: "budgetNote",
+          },
+          {
+            key: "evidence",
+            header: "Archivo",
+            render: (row) => row.counterEvidenceName || "—",
           },
         ]}
         data={queue}
@@ -118,6 +124,8 @@ export function BudgetApprovalView() {
           ))}
         </ul>
       ) : null}
+
+      {project.id !== "prj-pending" ? <BudgetHistory project={project} events={budgetEvents} /> : null}
     </div>
   );
 }

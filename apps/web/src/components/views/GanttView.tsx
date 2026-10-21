@@ -8,7 +8,7 @@ import { useOrg } from "@/components/layout/OrgProvider";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatClp, formatRatio, registeredBudgetClp } from "@/lib/evm";
 import { computeLiveEvm } from "@/lib/evm-project";
-import { blockingActivityIds } from "@/lib/quality";
+import { minuteAcRows } from "@/lib/minutes";
 import { scheduleUnlocked } from "@/lib/kickoff";
 import {
   ELEMENT_KIND_LABELS,
@@ -58,7 +58,7 @@ function kindBadgeClass(kind: ScheduleElementKind) {
 }
 
 export function GanttView() {
-  const { project, role, gantt, reports, nonconformities, addGanttActivity, updateGanttActivity, importSchedule, canOperate } =
+  const { project, role, gantt, reports, minutes, addGanttActivity, updateGanttActivity, importSchedule, canOperate } =
     useOrg();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<GanttActivity | null>(null);
@@ -71,13 +71,10 @@ export function GanttView() {
   const budgetClp = registeredBudgetClp(project);
   const waitingBudget = project.id !== "prj-pending" && budgetClp <= 0;
   const roots = scheduleRoots(activities);
-  const held = useMemo(
-    () => blockingActivityIds(nonconformities.filter((item) => item.projectId === project.id)),
-    [nonconformities, project.id],
-  );
+  const acRows = useMemo(() => minuteAcRows(minutes, project.id), [minutes, project.id]);
   const live = useMemo(
-    () => computeLiveEvm(project, activities, reports, role, undefined, held),
-    [project, activities, reports, role, held],
+    () => computeLiveEvm(project, activities, reports, role, undefined, undefined, acRows),
+    [project, activities, reports, role, acRows],
   );
 
   function scheduleMeta() {
@@ -186,6 +183,11 @@ export function GanttView() {
               {item.start} → {item.end} · {progress}%
               {item.budgetPv ? ` · ${formatClp(item.budgetPv)}` : ""}
             </span>
+            {kids.length ? null : (
+              <Link href={`/progress?task=${item.id}`} className="rounded border border-slate-200 px-2 py-0.5 hover:bg-slate-50">
+                Avance parcial
+              </Link>
+            )}
             {!locked ? (
               <button
                 type="button"
@@ -376,11 +378,18 @@ export function GanttView() {
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <p className="text-xs text-slate-600">{progress}%</p>
-                {!locked ? (
-                  <button type="button" className="text-xs underline" onClick={() => setEditing(item)}>
-                    Editar desvío
-                  </button>
-                ) : null}
+                <span className="flex gap-3">
+                  {childrenOf(activities, item.code).length ? null : (
+                    <Link href={`/progress?task=${item.id}`} className="text-xs underline">
+                      Avance parcial
+                    </Link>
+                  )}
+                  {!locked ? (
+                    <button type="button" className="text-xs underline" onClick={() => setEditing(item)}>
+                      Editar desvío
+                    </button>
+                  ) : null}
+                </span>
               </div>
             </article>
           );
@@ -476,6 +485,10 @@ export function GanttView() {
             requiresFieldEvidence: elementKind === "hito" ? false : requiresFieldEvidence,
             baselineStart: values.start,
             baselineFinish: values.end,
+            scopeNote: "",
+            doneWhen: "",
+            nature: elementKind === "inspeccion" || requiresFieldEvidence ? "registro" : "archivo",
+            pieces: [],
           });
           setOpen(false);
         }}

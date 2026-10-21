@@ -1,3 +1,4 @@
+import { normalizeGanttActivity } from "@/lib/schedule-csv";
 import { demoProject, demoTenant } from "@/mocks/demo-project";
 import { defaultComponentIds } from "@/lib/components-catalog";
 import { emptyTenantIntegrations } from "@/lib/tenant-integrations";
@@ -219,7 +220,7 @@ export const initialAssignments: ProjectAssignment[] = [
   { id: "as-7", projectId: privateProject.id, userId: "u-com", note: "Cierre comercial" },
 ];
 
-export const initialGantt: GanttActivity[] = [
+export const initialGantt: GanttActivity[] = ([
   {
     id: "g1",
     projectId: demoProject.id,
@@ -305,7 +306,9 @@ export const initialGantt: GanttActivity[] = [
     baselineStart: "2026-04-01",
     baselineFinish: "2026-06-15",
   },
-];
+] satisfies Omit<GanttActivity, "scopeNote" | "doneWhen" | "nature" | "pieces">[]).map((item) =>
+  normalizeGanttActivity(item),
+);
 
 export const tenantSeed = demoTenant;
 

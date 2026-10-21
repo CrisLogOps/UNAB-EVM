@@ -9,14 +9,16 @@ import { BoundedSelect } from "@/components/forms/BoundedSelect";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { ROLE_LABELS, NAV_GROUP_LABELS, type NavGroup } from "@/lib/constants";
 import { personLabel } from "@/lib/handover";
-import { OPERATING_MODE_LABEL, resolveOperatingMode } from "@/lib/operating-mode";
+import { appChannel, OPERATING_MODE_LABEL, resolveOperatingMode } from "@/lib/operating-mode";
 import { HOME_HREF } from "@/lib/startup-flow";
 import { useOrg } from "./OrgProvider";
 import { useRoleContext } from "./RoleProvider";
 import { OperatingModeSwitch } from "./OperatingModeSwitch";
 
 const ENV_FOOTER =
-  "OpenEVM · Ambiente local · rama Dev · Seminario de Grado UNAB · Uso académico";
+  appChannel() === "development"
+    ? "OpenEVM · Ambiente local · rama Dev · Seminario de Grado UNAB · Uso académico"
+    : "OpenEVM · Validación · Seminario de Grado UNAB · Uso académico";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -66,21 +68,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
       {open ? (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-[var(--brand)]/40 print:hidden lg:hidden"
+          className="fixed inset-0 z-40 bg-[var(--brand)]/40 print:hidden md:hidden"
           aria-label="Cerrar menú"
           onClick={() => setOpen(false)}
         />
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,88vw)] flex-col bg-[var(--brand)] text-white transition-transform print:hidden lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,88vw)] flex-col bg-[var(--brand)] text-white transition-transform print:hidden md:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{ paddingTop: "var(--safe-top)" }}
       >
         <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-4">
           <OpenEvmMark variant="light" subtitle="Cómo va la obra" />
-          <button type="button" className="p-2 lg:hidden" onClick={() => setOpen(false)}>
+          <button type="button" className="p-2 md:hidden" onClick={() => setOpen(false)}>
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -132,7 +134,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <div className="flex min-h-dvh min-w-0 flex-col lg:pl-72">
+      <div className="flex min-h-dvh min-w-0 flex-col md:pl-72">
         <header
           className="sticky top-0 z-20 border-b border-zinc-200 bg-[var(--header)] px-3 py-2 print:hidden sm:px-4"
           style={{ paddingTop: "max(0.5rem, var(--safe-top))" }}
@@ -140,13 +142,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="shrink-0 rounded-md border border-zinc-200 p-2 lg:hidden"
+              className="shrink-0 rounded-md border border-zinc-200 p-2 md:hidden"
               onClick={() => setOpen(true)}
               aria-label="Abrir menú"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="min-w-0 flex-1 lg:hidden">
+            <div className="min-w-0 flex-1 md:hidden">
               <OpenEvmMark compact />
             </div>
             <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
@@ -171,7 +173,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
           <button
             type="button"
-            className="mt-2 flex w-full items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-left lg:hidden"
+            className="mt-2 flex w-full items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-left md:hidden"
             aria-expanded={contextOpen}
             onClick={() => setContextOpen((value) => !value)}
           >
@@ -189,7 +191,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </button>
 
           <div
-            className={`${contextOpen ? "mt-2 grid" : "hidden"} grid-cols-1 gap-2 sm:grid-cols-2 lg:mt-2 lg:grid ${
+            className={`${contextOpen ? "mt-2 grid" : "hidden"} grid-cols-1 gap-2 sm:grid-cols-2 md:mt-2 md:grid ${
               isIndividualMode ? "xl:grid-cols-3" : "xl:grid-cols-4"
             }`}
           >
@@ -241,7 +243,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 px-3 py-4 pb-[calc(5.75rem+var(--safe-bottom))] sm:px-6 sm:py-6 lg:pb-6 print:p-0 print:pb-0">
+        <main className="min-w-0 flex-1 px-3 py-4 pb-[calc(5.75rem+var(--safe-bottom))] sm:px-6 sm:py-6 md:pb-6 print:p-0 print:pb-0">
           {children}
         </main>
 

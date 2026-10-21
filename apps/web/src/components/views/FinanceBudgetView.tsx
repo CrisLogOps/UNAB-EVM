@@ -3,22 +3,17 @@
 import { useState } from "react";
 import { DataTable } from "@/components/data/DataTable";
 import { ModalForm } from "@/components/forms/ModalForm";
+import { BudgetHistory } from "@/components/views/BudgetHistory";
 import { useOrg } from "@/components/layout/OrgProvider";
+import { latestBudgetEvent } from "@/lib/budget-history";
 import { formatClp, formatUf, formatUsd } from "@/lib/evm";
+import { PROJECT_STATUS_LABEL } from "@/lib/kickoff";
 import type { Project } from "@/lib/types";
 
 export function FinanceBudgetView() {
-  const { visibleProjects, proposeBudget, canOperate } = useOrg();
+  const { visibleProjects, project, budgetEvents, proposeBudget, canOperate } = useOrg();
   const [target, setTarget] = useState<Project | null>(null);
-  const queue = visibleProjects.filter(
-    (item) =>
-      item.id !== "prj-pending" &&
-      !item.bac &&
-      (item.status === "draft_kickoff" ||
-        item.status === "awaiting_budget" ||
-        item.status === "budget_counter" ||
-        item.status === "active"),
-  );
+  const queue = visibleProjects.filter((item) => item.id !== "prj-pending");
 
   return (
     <div className="space-y-4">
@@ -26,8 +21,8 @@ export function FinanceBudgetView() {
         <p className="text-xs uppercase tracking-wide text-slate-500">Lo que cuesta la obra</p>
         <h1 className="text-2xl font-semibold">Presupuesto</h1>
         <p className="text-sm text-slate-600">
-          Quien cubre esta tarea carga el monto en pesos. UF y dólar salen de la paridad del proyecto.
-          El visto bueno lo da el administrador; esta pantalla no valida.
+          El monto que escribiste al crear la obra es el presupuesto inicial. Confírmalo para que el gestor lo
+          revise. Si él cambia la cifra, la razón queda en el historial y en Conocimiento.
         </p>
       </div>
 
@@ -40,11 +35,26 @@ export function FinanceBudgetView() {
             render: (row) => `UF ${row.ufClp.toLocaleString("es-CL")} · US$ ${row.usdClp}`,
           },
           {
-            key: "counter",
-            header: "Contrapropuesta",
-            render: (row) => (row.counterBac ? formatClp(row.counterBac) : "—"),
+            key: "inicial",
+            header: "Presupuesto inicial",
+            render: (row) => {
+              const amount = row.proposedBac || row.bac || 0;
+              return amount ? formatClp(amount) : "Sin monto";
+            },
           },
-          { key: "status", header: "Estado", accessor: "status" },
+          {
+            key: "last",
+            header: "Último registro",
+            render: (row) => {
+              const last = latestBudgetEvent(row, budgetEvents);
+              return last ? formatClp(last.amountClp) : "—";
+            },
+          },
+          {
+            key: "status",
+            header: "Estado",
+            render: (row) => PROJECT_STATUS_LABEL[row.status],
+          },
         ]}
         data={queue}
         rowKey={(row) => row.id}
@@ -52,9 +62,10 @@ export function FinanceBudgetView() {
           canOperate("budget:propose")
             ? [
                 {
-                  label: "Cargar presupuesto",
+                  label: "Confirmar monto",
                   variant: "edit" as const,
                   onClick: (row) => setTarget(row),
+                  hidden: (row: Project) => row.bac > 0 || row.status === "pending_approval",
                 },
               ]
             : []
@@ -65,7 +76,7 @@ export function FinanceBudgetView() {
         open={Boolean(target)}
         onClose={() => setTarget(null)}
         title={target ? `Presupuesto · ${target.name}` : "Presupuesto"}
-        submitLabel="Enviar al jefe de proyecto"
+        submitLabel="Enviar a revisión del gestor"
         fields={[
           {
             name: "amount",
@@ -90,10 +101,12 @@ export function FinanceBudgetView() {
 
       {target ? (
         <p className="text-xs text-slate-500">
-          Referencia: {formatUf(Number(target.counterBac ?? 0), target.ufClp)} ·{" "}
-          {formatUsd(Number(target.counterBac ?? 0), target.usdClp)} si usa la contrapropuesta.
+          Referencia: {formatUf(Number(target.counterBac ?? target.proposedBac ?? 0), target.ufClp)} ·{" "}
+          {formatUsd(Number(target.counterBac ?? target.proposedBac ?? 0), target.usdClp)}.
         </p>
       ) : null}
+
+      {project.id !== "prj-pending" ? <BudgetHistory project={project} events={budgetEvents} /> : null}
     </div>
   );
 }

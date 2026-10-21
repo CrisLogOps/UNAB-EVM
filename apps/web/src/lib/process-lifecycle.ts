@@ -216,9 +216,9 @@ const OPENEVM_RUNTIME: Record<string, RuntimeHint> = {
     inOpenEvm: "Paso del flujo válido. No hay acta de instalación de faena para prueba.",
   },
   "F4.2": {
-    href: "/libro-obra",
+    href: "/minutas",
     readyForTest: true,
-    inOpenEvm: "Interferencias y reclamos de terceros se anotan en el Libro de obra. El gate de permisos municipales (rechazo → reintenta) sigue pendiente.",
+    inOpenEvm: "Las instrucciones del mandante o del arquitecto que mueven el gasto se anotan en Minutas. El gate de permisos municipales (rechazo → reintenta) sigue pendiente.",
   },
   "F4.3": {
     href: "/demo",
@@ -233,7 +233,7 @@ const OPENEVM_RUNTIME: Record<string, RuntimeHint> = {
   "F4.5": {
     href: "/progress",
     readyForTest: true,
-    inOpenEvm: "Avance: terreno sube foto y las otras áreas suben PDF o planilla. La nota del parte diario alimenta el Libro de obra.",
+    inOpenEvm: "Avance: terreno sube foto y las otras áreas suben PDF o planilla. El gasto y el adicional se registran en Minutas.",
   },
   "F4.6": {
     href: "/progress",
@@ -243,12 +243,12 @@ const OPENEVM_RUNTIME: Record<string, RuntimeHint> = {
   "F4.7": {
     href: "/finance",
     readyForTest: false,
-    inOpenEvm: "Pagos es placeholder. El costo real (AC) se anota al cargar avance o en Gastos.",
+    inOpenEvm: "Pagos es placeholder. El costo real (AC) suma el avance y los gastos de las minutas.",
   },
   "F4.8": {
-    href: "/libro-obra",
+    href: "/minutas",
     readyForTest: true,
-    inOpenEvm: "El Libro de obra registra observaciones de calidad/seguridad. Las no conformidades formales siguen pendientes.",
+    inOpenEvm: "La revisión de calidad quedó fuera del MVP. El valor ganado se sostiene con la evidencia del avance. El gasto se controla en Minutas.",
   },
   "F4.9": {
     href: "/gantt",

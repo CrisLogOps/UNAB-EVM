@@ -312,6 +312,10 @@ export function parseScheduleMatrix(table: string[][]): { rows: ScheduleCsvRow[]
       requiresFieldEvidence: elementKind === "hito" && !parseYes(inspectRaw) ? false : requiresFieldEvidence,
       baselineStart: start,
       baselineFinish: end,
+      scopeNote: "",
+      doneWhen: "",
+      nature: elementKind === "inspeccion" || requiresFieldEvidence ? "registro" : "archivo",
+      pieces: [],
     });
   });
 
@@ -584,6 +588,20 @@ export function normalizeGanttActivity(
     requiresFieldEvidence,
     baselineStart: item.baselineStart || start,
     baselineFinish: item.baselineFinish || end,
+    scopeNote: item.scopeNote ?? "",
+    doneWhen: item.doneWhen ?? "",
+    nature:
+      item.nature === "archivo" || item.nature === "registro" || item.nature === "version"
+        ? item.nature
+        : elementKind === "inspeccion" || requiresFieldEvidence
+          ? "registro"
+          : "archivo",
+    pieces: (item.pieces ?? []).map((piece) => ({
+      id: piece.id || `pz-${item.id}`,
+      title: piece.title ?? "",
+      detail: piece.detail ?? "",
+      weight: Number(piece.weight) || 0,
+    })),
   };
 }
 

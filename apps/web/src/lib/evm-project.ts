@@ -116,6 +116,18 @@ function activityAc(reports: ProgressReport[], taskId: string) {
   return reports.filter((item) => item.taskId === taskId).reduce((sum, item) => sum + (item.actualCost || 0), 0);
 }
 
+function extraAcAmount(
+  extraAc: { period: string; taskId: string; amount: number }[],
+  until?: string,
+  taskId?: string,
+) {
+  return extraAc.reduce((sum, row) => {
+    if (until && row.period > until) return sum;
+    if (taskId !== undefined && row.taskId !== taskId) return sum;
+    return sum + (row.amount || 0);
+  }, 0);
+}
+
 function enumeratePeriods(start: string, end: string, asOf: string) {
   const min = toDay(start);
   const max = Math.max(toDay(end), toDay(asOf));
@@ -141,6 +153,7 @@ export function computeLiveEvm(
   role: UserRole,
   asOf = new Date().toISOString().slice(0, 10),
   held?: Set<string>,
+  extraAc: { period: string; taskId: string; amount: number }[] = [],
 ): LiveEvm {
   const scoped = role === "field" || role === "subcontractor";
   const visible = laboresForRole(activities, role);
@@ -165,7 +178,7 @@ export function computeLiveEvm(
       earnedPercent: earned,
       pv: weight * planned,
       ev: weight * earned,
-      ac: activityAc(projectReports, item.id),
+      ac: activityAc(projectReports, item.id) + extraAcAmount(extraAc, undefined, item.id),
       evidence: latestEvidence(projectReports, item.id),
       requiresFieldEvidence: item.requiresFieldEvidence,
       requiresEvidence: activityRequiresEvidence(item, activities),
@@ -179,7 +192,7 @@ export function computeLiveEvm(
       (sum, item) => sum + activityWeight(item) * (rolledProgress(item, activities, projectReports, new Set(), held) / 100),
     0,
   );
-  const ac = pool.reduce((sum, item) => sum + activityAc(projectReports, item.id), 0);
+  const ac = pool.reduce((sum, item) => sum + activityAc(projectReports, item.id), 0) + extraAcAmount(extraAc);
 
   const rangeStart = pool.reduce((min, item) => (item.start < min ? item.start : min), project.startDate || asOf);
   const rangeEnd = pool.reduce((max, item) => (item.end > max ? item.end : max), project.finishDate || asOf);
@@ -190,9 +203,10 @@ export function computeLiveEvm(
       (sum, item) => sum + activityWeight(item) * plannedPercent(item.start, item.end, period),
       0,
     );
-    const pointAc = projectReports
-      .filter((report) => report.period <= period && pool.some((item) => item.id === report.taskId))
-      .reduce((sum, report) => sum + (report.actualCost || 0), 0);
+    const pointAc =
+      projectReports
+        .filter((report) => report.period <= period && pool.some((item) => item.id === report.taskId))
+        .reduce((sum, report) => sum + (report.actualCost || 0), 0) + extraAcAmount(extraAc, period);
     const ratio = pv > 0 ? Math.min(1, pointPv / pv) : 0;
     return {
       period: period.slice(5),
@@ -242,4 +256,133 @@ export function computeLiveEvm(
     series,
     activities: rows,
   };
+}
+
+export interface WeekReading {
+  date: string;
+  period: string;
+  pv: number;
+  ev: number | null;
+  ac: number | null;
+  bac: number;
+  physicalPercent: number | null;
+  plannedPercent: number;
+  current: boolean;
+}
+
+function addDays(iso: string, days: number) {
+  return isoFromDay(toDay(iso) + days * 86_400_000);
+}
+
+function formatWeekLabel(iso: string) {
+  const [year, month, day] = iso.split("-");
+  return `${day}-${month}-${year.slice(2)}`;
+}
+
+function earnedRatioAsOf(
+  item: GanttActivity,
+  activities: GanttActivity[],
+  reports: ProgressReport[],
+  asOf: string,
+  seen: Set<string>,
+): number {
+  const key = item.id || item.code;
+  if (key && seen.has(key)) return 0;
+  if (key) seen.add(key);
+  const children = childrenOf(activities, item.code).filter((child) => (child.id || child.code) !== key);
+  if (!children.length) {
+    let ratio = 0;
+    for (const report of reports) {
+      if (report.taskId !== item.id || report.period > asOf) continue;
+      if (report.evidenceStatus !== "validated") continue;
+      if (report.closure === "prerequisito" || report.closure === "no_conforme") continue;
+      ratio = Math.max(ratio, report.physicalPercent || 0);
+    }
+    return ratio;
+  }
+  const measurable = children.filter((child) => child.elementKind !== "hito" || child.requiresFieldEvidence);
+  const leaves = measurable.filter((child) => !childrenOf(activities, child.code).length);
+  const pool = leaves.length ? leaves : measurable.length ? measurable : children;
+  const nextSeen = new Set(seen);
+  const total = pool.reduce(
+    (sum, child) => sum + earnedRatioAsOf(child, activities, reports, asOf, nextSeen),
+    0,
+  );
+  return pool.length ? total / pool.length : 0;
+}
+
+export function weekCutDates(start: string, finish: string, asOf: string, extra: string[] = []) {
+  const from = start || asOf;
+  const dates: string[] = [];
+  let cursor = from;
+  let guard = 0;
+  while (cursor && cursor <= asOf && guard < 160) {
+    dates.push(cursor);
+    cursor = addDays(cursor, 7);
+    guard += 1;
+  }
+  if (asOf && !dates.includes(asOf)) dates.push(asOf);
+  for (const date of extra) {
+    if (!date || dates.includes(date)) continue;
+    if (finish && date > finish && date > asOf) continue;
+    dates.push(date);
+  }
+  return dates.filter(Boolean).sort();
+}
+
+export function projectReadingAt(
+  project: Project,
+  activities: GanttActivity[],
+  reports: ProgressReport[],
+  role: UserRole,
+  asOf: string,
+  today = new Date().toISOString().slice(0, 10),
+  extraAc: { period: string; taskId: string; amount: number }[] = [],
+) {
+  const scoped = role === "field" || role === "subcontractor";
+  const visible = laboresForRole(activities, role);
+  const pool = scoped ? visible : leavesOf(activities);
+  const projectReports = reports.filter((item) => item.projectId === project.id);
+  const live = asOf >= today;
+  const bac = !scoped && project.bac > 0 ? project.bac : pool.reduce((sum, item) => sum + activityWeight(item), 0);
+  const pv = pool.reduce((sum, item) => sum + activityWeight(item) * plannedPercent(item.start, item.end, asOf), 0);
+  const ev = pool.reduce((sum, item) => {
+    const ratio = live
+      ? rolledProgress(item, activities, projectReports, new Set()) / 100
+      : earnedRatioAsOf(item, activities, projectReports, asOf, new Set());
+    return sum + activityWeight(item) * ratio;
+  }, 0);
+  const ac = live
+    ? pool.reduce((sum, item) => sum + activityAc(projectReports, item.id), 0) + extraAcAmount(extraAc)
+    : projectReports
+        .filter((report) => report.period <= asOf && pool.some((item) => item.id === report.taskId))
+        .reduce((sum, report) => sum + (report.actualCost || 0), 0) + extraAcAmount(extraAc, asOf);
+  return { bac, pv, ev, ac, physicalPercent: bac > 0 ? ev / bac : 0 };
+}
+
+export function weeklyReadings(
+  project: Project,
+  activities: GanttActivity[],
+  reports: ProgressReport[],
+  role: UserRole,
+  today = new Date().toISOString().slice(0, 10),
+  extraAc: { period: string; taskId: string; amount: number }[] = [],
+  extraDates: string[] = [],
+): WeekReading[] {
+  const dates = weekCutDates(project.startDate, project.finishDate, today, extraDates);
+  return dates.map((date) => {
+    const reading = projectReadingAt(project, activities, reports, role, date, today, extraAc);
+    const future = date > today;
+    return {
+      date,
+      period: formatWeekLabel(date),
+      pv: reading.pv,
+      ev: future ? null : reading.ev,
+      ac: future ? null : reading.ac,
+      bac: reading.bac,
+      physicalPercent: future || reading.bac <= 0 ? null : reading.ev / reading.bac,
+      plannedPercent: reading.bac > 0 ? reading.pv / reading.bac : 0,
+      current: date === today,
+    };
+  });
 }

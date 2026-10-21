@@ -125,6 +125,19 @@ export interface ProjectAssignment {
 
 export type ScheduleElementKind = "paquete" | "actividad" | "hito" | "inspeccion";
 
+/** Cómo se compone el % de una actividad. */
+export type ActivityNature = "archivo" | "registro" | "version";
+
+/** Tramo que suma al avance: documento, medición o versión. */
+export interface ActivityPiece {
+  id: string;
+  title: string;
+  detail: string;
+  weight: number;
+}
+
+export type ProgressClosure = "parcial" | "conforme" | "prerequisito" | "no_conforme";
+
 export interface GanttActivity {
   id: string;
   projectId: string;
@@ -141,6 +154,12 @@ export interface GanttActivity {
   requiresFieldEvidence: boolean;
   baselineStart: string;
   baselineFinish: string;
+  /** En qué consiste el trabajo. */
+  scopeNote: string;
+  /** Qué tiene que existir para darla por terminada. */
+  doneWhen: string;
+  nature: ActivityNature;
+  pieces: ActivityPiece[];
 }
 
 export type SignatureProviderId = "" | "ecert" | "acepta" | "toc" | "firmagob" | "other";
@@ -213,6 +232,16 @@ export interface KickoffProposal {
   body: string;
 }
 
+export type KickoffAntecedentKind = "partida" | "consideracion";
+
+/** Partida o consideración que acompaña al documento del proyecto. */
+export interface KickoffAntecedentItem {
+  id: string;
+  kind: KickoffAntecedentKind;
+  title: string;
+  detail: string;
+}
+
 export interface KickoffAreaReview {
   id: string;
   areaId: string;
@@ -226,6 +255,26 @@ export interface KickoffAreaReview {
   evidenceFileSize: number;
   knowledgeRefs: string[];
   recordedAt: string;
+}
+
+export type KnowledgeScope = "empresa" | "cliente" | "proyecto";
+export type KnowledgeMoment = "antes" | "durante" | "cierre";
+export type KnowledgeSource = "kickoff" | "paquete" | "manual" | "presupuesto";
+
+export type BudgetEventKind = "inicial" | "carga" | "contrapropuesta" | "aceptacion" | "aprobacion";
+
+/** Cada cifra del presupuesto, desde lo vendido hasta el visto bueno. */
+export interface BudgetEvent {
+  id: string;
+  projectId: string;
+  at: string;
+  kind: BudgetEventKind;
+  amountClp: number;
+  note: string;
+  evidenceFileName: string;
+  byUserId: string;
+  byRole: UserRole;
+  byName: string;
 }
 
 export interface KnowledgeEntry {
@@ -242,6 +291,13 @@ export interface KnowledgeEntry {
   comment: string;
   evidenceFileName: string;
   proposalTitle: string;
+  /** Vacío en registros viejos de kickoff: se leen como proyecto, antes de empezar. */
+  scope?: KnowledgeScope;
+  moment?: KnowledgeMoment;
+  source?: KnowledgeSource;
+  clientId?: string;
+  activityCode?: string;
+  activityName?: string;
 }
 
 export interface ProjectKickoff {
@@ -281,10 +337,38 @@ export interface ProjectKickoff {
   pmValidatedBy: string;
   pmValidatedAt: string | null;
   internalConfirmedAt: string | null;
+  /** Partidas y consideraciones cargadas con el documento del proyecto. */
+  antecedentItems: KickoffAntecedentItem[];
+  /** Quien formaliza el kickoff interno con los antecedentes. */
+  internalSignerName: string;
+  internalSignedAt: string | null;
+  /** Archivo de cronograma subido como línea base. Vacío si sigue el ejemplo. */
+  baselineScheduleName: string;
   clientDate: string;
   clientAttendees: string;
   clientAgreements: string;
   clientConfirmedAt: string | null;
+  /** null hasta que la reunión responde. */
+  paymentsAgreed: boolean | null;
+  /** Qué se dijo de los plazos. */
+  paymentNote: string;
+  /** Fechas de estado de pago conversadas. Vacío si no se fijaron. */
+  paymentDates: string[];
+}
+
+export interface PaymentCut {
+  id: string;
+  projectId: string;
+  dueDate: string;
+  label: string;
+  origin: "kickoff" | "admin";
+  note: string;
+  /** Lectura congelada. Null mientras el estado sigue abierto. */
+  frozenAt: string | null;
+  pv: number | null;
+  ev: number | null;
+  ac: number | null;
+  physicalPercent: number | null;
 }
 
 export interface Project {
@@ -306,6 +390,8 @@ export interface Project {
   proposedBac: number | null;
   counterBac: number | null;
   budgetNote: string;
+  /** Archivo con el que el gestor funda una contrapropuesta. */
+  counterEvidenceName?: string;
   /** Cronograma cargado desde la plantilla EDT; hay que editarlo y volver a subirlo. */
   scheduleExample: boolean;
 }
@@ -329,6 +415,25 @@ export type WorkBookSafetyLevel = "" | "observation" | "incident" | "accident";
 export type WorkBookThirdPartyKind = "" | "claim" | "interference";
 /** Autocontrol de faena (modo individual). No es firma legal del folio. */
 export type WorkBookBoardStatus = "open" | "doing" | "closed";
+
+export type MinuteOrigin = "mandante" | "arquitecto" | "interno";
+export type MinuteCostEffect = "gasto" | "adicional" | "sin_costo";
+
+/** Instrucción de la constructora. El gasto entra al costo real; el adicional queda por cobrar. */
+export interface SiteMinute {
+  id: string;
+  projectId: string;
+  occurredOn: string;
+  origin: MinuteOrigin;
+  issuer: string;
+  body: string;
+  activityId: string;
+  costEffect: MinuteCostEffect;
+  amountClp: number;
+  evidenceFileName: string;
+  recordedBy: string;
+  recordedAt: string;
+}
 
 /** Carátula del libro: datos mínimos para una copia de fiscalización. */
 export interface WorkBookMeta {
@@ -455,6 +560,9 @@ export interface ProgressReport {
   gps?: { lat: number; lng: number; accuracy: number };
   clientEventId: string;
   note?: string;
+  closure?: ProgressClosure;
+  /** Tramos que este registro suma al %. */
+  pieceIds?: string[];
 }
 
 export interface EvmMetrics {

@@ -54,8 +54,8 @@ export function IndividualInternalKickoff({
       <div>
         <h2 className="text-lg font-semibold">Kickoff interno</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Trabajás solo: no hay validación entre áreas. Registrá lo vendido, las notas que vas a llevar al cliente y un
-          criterio PMBOK para armar el proyecto. El modo colaborativo sigue disponible cuando sumes integrantes.
+          El documento El proyecto ya está en antecedentes. Acá unificás las notas y el criterio PMBOK, y formalizás
+          con tu nombre antes de ir al kickoff con el cliente.
         </p>
       </div>
 
@@ -78,10 +78,10 @@ export function IndividualInternalKickoff({
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium">Documento de la propuesta (opcional)</span>
+          <span className="mb-1 block font-medium">Documento El proyecto (PDF)</span>
           <input
             type="file"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,application/pdf"
+            accept="application/pdf,.pdf"
             disabled={commercialDone}
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -158,14 +158,24 @@ export function IndividualInternalKickoff({
         )}
       </section>
 
+      <label className="block text-sm">
+        <span className="mb-1 block font-medium">Nombre de quien formaliza</span>
+        <input
+          value={draft.internalSignerName ?? ""}
+          disabled={internalDone}
+          onChange={(event) => onPatch({ internalSignerName: event.target.value })}
+          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 disabled:bg-slate-50"
+        />
+      </label>
+
       {!internalDone ? (
         <button
           type="button"
-          disabled={!canClose}
+          disabled={!canClose || (draft.internalSignerName ?? "").trim().length < 3}
           onClick={onConfirmInternal}
           className="rounded-md bg-amber-800 px-3 py-2 text-sm text-white hover:bg-amber-900 disabled:opacity-40"
         >
-          Cerrar kickoff interno
+          Formalizar kickoff interno
         </button>
       ) : (
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-950">

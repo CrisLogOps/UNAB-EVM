@@ -5,17 +5,28 @@ export const ROLE_GUIDE: Record<UserRole, { title: string; summary: string; duti
   owner: {
     title: "Administrador",
     summary: "Arma la empresa, invita gente y mira cómo van las obras. Si aún no hay equipo, puede hacerlo todo.",
-    duties: ["Ver en Inicio qué falta", "Invitar personas", "Dar el visto bueno al presupuesto"],
+    duties: [
+      "Ver en Inicio qué falta",
+      "Invitar personas",
+      "Cargar el presupuesto y los gastos si no hay Finanzas ni terreno",
+      "Dar el visto bueno al presupuesto",
+      "En modo independiente: anotar minutas de gasto e instrucciones",
+    ],
   },
   pmo: {
     title: "Gestor de proyectos",
     summary: "Recibe lo vendido por Comercial, confirma con juicio experto si se puede cumplir y ordena la ejecución.",
-    duties: ["Validar el kickoff interno", "Armar el cronograma", "Llevar el libro de obra"],
+    duties: [
+      "Validar el kickoff interno",
+      "Revisar el presupuesto y fundar la contrapropuesta con un archivo",
+      "Armar el cronograma",
+      "Registrar minutas cuando una instrucción mueve el gasto",
+    ],
   },
   admin_obra: {
     title: "Jefe de faena",
     summary: "Mira el estado en terreno y respalda las partidas que el cronograma le asigna.",
-    duties: ["Ver el estado de la obra", "Cargar evidencia de tus partidas", "Anotar el libro de obra"],
+    duties: ["Ver el estado de la obra", "Cargar evidencia de tus partidas", "Anotar la minuta del gasto"],
   },
   finance: {
     title: "Finanzas",
@@ -35,7 +46,7 @@ export const ROLE_GUIDE: Record<UserRole, { title: string; summary: string; duti
   field: {
     title: "Terreno",
     summary: "Registra el avance del día con foto o archivo. Sin evidencia validada, el avance no cuenta.",
-    duties: ["Ver el estado de tus labores", "Cargar avance", "Anotar el libro de obra", "Adjuntar foto o documento"],
+    duties: ["Ver el estado de tus labores", "Cargar avance", "Anotar el gasto en una minuta", "Adjuntar foto o documento"],
   },
   subcontractor: {
     title: "Subcontrato",

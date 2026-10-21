@@ -22,9 +22,8 @@ export function ClientsView() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Después de armar la empresa</p>
           <h1 className="text-2xl font-semibold">Clientes y kickoff</h1>
           <p className="max-w-2xl text-sm text-slate-600">
-            Registra al cliente y el proyecto, con su presupuesto inicial. El kickoff interno y el del
-            cliente son opcionales: el administrador o el gestor pueden completarlos, o saltarlos para
-            migrar una obra que ya está en curso.
+            Primero el cliente y el proyecto. Después se cargan los antecedentes, se formaliza el kickoff
+            interno y los acuerdos con el cliente cierran la fase 1.
           </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
@@ -57,8 +56,8 @@ export function ClientsView() {
           <p className="text-xs uppercase tracking-wide text-slate-500">Cartera</p>
           <h1 className="text-2xl font-semibold">Clientes</h1>
           <p className="text-sm text-slate-600">
-            Cada cliente tiene sus proyectos. El kickoff es opcional: sirve para registrar lo vendido y los
-            acuerdos, o se salta si la obra ya está en desarrollo. Los registros alimentan la{" "}
+            Cada cliente tiene sus proyectos. Los antecedentes y el kickoff interno dejan el documento, el
+            cronograma y la firma antes de cerrar la fase 1 con el cliente. Los registros alimentan la{" "}
             <Link href="/knowledge" className="underline">
               base de conocimiento
             </Link>

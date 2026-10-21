@@ -13,6 +13,7 @@ export type MvpSnapshot = {
   reports?: unknown[];
   workBook?: unknown[];
   workBookMetas?: unknown[];
+  paymentCuts?: unknown[];
   profiles?: unknown[];
   areas?: unknown[];
   sessionUserId?: string;

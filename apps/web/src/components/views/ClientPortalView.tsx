@@ -6,7 +6,6 @@ import { useEffect } from "react";
 import { useOrg } from "@/components/layout/OrgProvider";
 import { KICKOFF_PHASE_LABEL, clientLabel } from "@/lib/kickoff";
 import { ELEMENT_KIND_LABELS } from "@/lib/schedule-csv";
-import { activityQualityState, blockingActivityIds } from "@/lib/quality";
 import type { GanttActivity } from "@/lib/types";
 
 function formatDay(value: string) {
@@ -23,7 +22,7 @@ function activityRows(rows: GanttActivity[]) {
 export function ClientPortalView() {
   const params = useSearchParams();
   const router = useRouter();
-  const { clients, projects, gantt, project, setProjectId, qualityChecks, nonconformities } = useOrg();
+  const { clients, projects, gantt, project, setProjectId } = useOrg();
   const requestedId = params.get("id") ?? "";
   const obraId = params.get("obra") ?? "";
   const fallbackId = project.id !== "prj-pending" ? project.clientId : "";
@@ -32,9 +31,6 @@ export function ClientPortalView() {
   const works = projects.filter((item) => item.clientId === clientId && item.id !== "prj-pending");
   const obra = works.find((item) => item.id === obraId);
   const rows = obra ? activityRows(gantt.filter((item) => item.projectId === obra.id)) : [];
-  const held = blockingActivityIds(nonconformities.filter((item) => item.projectId === obra?.id));
-  const checks = qualityChecks.filter((item) => item.projectId === obra?.id);
-
   useEffect(() => {
     if (requestedId || !fallbackId) return;
     router.replace(`/cliente?id=${fallbackId}`);
@@ -102,7 +98,6 @@ export function ClientPortalView() {
                     <th className="px-3 py-2 font-medium">Inicio</th>
                     <th className="px-3 py-2 font-medium">Término</th>
                     <th className="px-3 py-2 font-medium">Avance</th>
-                    <th className="px-3 py-2 font-medium">Revisión</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -114,7 +109,6 @@ export function ClientPortalView() {
                       <td className="px-3 py-2">{formatDay(row.start)}</td>
                       <td className="px-3 py-2">{formatDay(row.end)}</td>
                       <td className="px-3 py-2 tabular-nums">{Math.round(row.progress)}%</td>
-                      <td className="px-3 py-2">{activityQualityState(row.id, checks, held)}</td>
                     </tr>
                   ))}
                 </tbody>

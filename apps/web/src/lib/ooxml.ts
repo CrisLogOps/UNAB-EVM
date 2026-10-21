@@ -407,10 +407,11 @@ export async function readXlsxSheetTables(buffer: ArrayBuffer): Promise<{ name: 
         if (type === "s") {
           const idx = Number(textOf(descendants(cell, "v")[0] ?? null));
           value = shared[idx] ?? "";
-        } else if (type === "inlineStr") {
-          value = descendants(cell, "t")
-            .map((t) => t.textContent ?? "")
-            .join("");
+        } else if (type === "inlineStr" || type === "str") {
+          value =
+            descendants(cell, "t")
+              .map((t) => t.textContent ?? "")
+              .join("") || textOf(descendants(cell, "v")[0] ?? null);
         } else {
           value = textOf(descendants(cell, "v")[0] ?? null);
         }

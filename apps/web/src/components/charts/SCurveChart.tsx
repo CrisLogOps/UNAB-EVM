@@ -11,8 +11,9 @@ import {
 } from "recharts";
 import type { SCurvePoint } from "@/lib/types";
 
-function formatAxis(value: number, money: boolean) {
-  if (!money) return `${Math.round(value)}`;
+function formatAxis(value: number, unit: "money" | "percent" | "effort") {
+  if (unit === "percent") return `${Math.round(value)}%`;
+  if (unit === "effort") return `${Math.round(value)}`;
   if (Math.abs(value) >= 1_000_000) return `${Math.round(value / 1_000_000)}M`;
   if (Math.abs(value) >= 1_000) return `${Math.round(value / 1_000)} mil`;
   return `${Math.round(value)}`;
@@ -21,10 +22,15 @@ function formatAxis(value: number, money: boolean) {
 export function SCurveChart({
   data,
   moneyMode = true,
+  unit,
+  title = "Curva S · Planificado (PV) · Valor ganado (EV) · Costo real (AC)",
 }: {
-  data: SCurvePoint[];
+  data: Array<Pick<SCurvePoint, "period" | "pv"> & { ev: number | null; ac: number | null }>;
   moneyMode?: boolean;
+  unit?: "money" | "percent" | "effort";
+  title?: string;
 }) {
+  const scale = unit ?? (moneyMode ? "money" : "effort");
   if (!data.length) {
     return (
       <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-500">
@@ -36,8 +42,8 @@ export function SCurveChart({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
       <h3 className="mb-2 text-sm font-semibold text-slate-700">
-        <span className="sm:hidden">Curva S</span>
-        <span className="hidden sm:inline">Curva S · Planificado (PV) · Valor ganado (EV) · Costo real (AC)</span>
+        <span className="sm:hidden">{title.startsWith("Curva física") ? "Curva física" : "Curva económica"}</span>
+        <span className="hidden sm:inline">{title}</span>
       </h3>
       <div className="h-44 w-full min-w-0 sm:h-64">
         <ResponsiveContainer width="100%" height="100%">
@@ -47,18 +53,19 @@ export function SCurveChart({
             <YAxis
               width={36}
               tick={{ fontSize: 10 }}
-              tickFormatter={(value: number) => formatAxis(value, moneyMode)}
+              tickFormatter={(value: number) => formatAxis(value, scale)}
             />
             <Tooltip
-              formatter={(value) =>
-                moneyMode
-                  ? new Intl.NumberFormat("es-CL", {
-                      style: "currency",
-                      currency: "CLP",
-                      maximumFractionDigits: 0,
-                    }).format(Number(value))
-                  : `${Math.round(Number(value))} (esfuerzo planificado)`
-              }
+              formatter={(value) => {
+                if (value == null || value === "") return "—";
+                if (scale === "percent") return `${Math.round(Number(value))}%`;
+                if (scale === "effort") return `${Math.round(Number(value))}`;
+                return new Intl.NumberFormat("es-CL", {
+                  style: "currency",
+                  currency: "CLP",
+                  maximumFractionDigits: 0,
+                }).format(Number(value));
+              }}
             />
             <Line type="monotone" dataKey="pv" name="PV planificado" stroke="#0b4a44" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="ev" name="EV valor ganado" stroke="#2ecc71" strokeWidth={2} dot={false} />

@@ -8,7 +8,7 @@ export default function CutsPage() {
     <RoleGate allow={["pmo"]} permission="schedule:edit">
       <PlaceholderPage
         title="Cortes"
-        description="El jefe de proyecto da el visto bueno a cada corte. El semáforo se ve en Estado."
+        description="Los cortes semanales y los estados de pago se ven en Estado. Cerrar un estado guarda el valor ganado y el costo real de esa fecha."
       />
     </RoleGate>
   );
